@@ -106,9 +106,18 @@ class ColumnProperties:
     # Units
     units: str = ''
 
+    def label_with_units(self) -> str:
+        """
+        Pretty print the label of the column with the units
+        """
+
+        if self.units == "":
+            return self.label
+
+        return f"{self.label} ({self.units})"
 
 # Dataset columns and properties
-COLUMNS = {
+INPUT_COLUMNS = {
     # Details about particular run
     'Directory': ColumnProperties(
         dtype='str',
@@ -298,6 +307,10 @@ COLUMNS = {
         dtype='int',
         label='Failures',
     ),
+}
+
+# Dataset columns and properties
+PERFORMANCE_METRIC_COLUMNS = {
     # Performance metrics
     # Throughput
     'Request_Throughput': ColumnProperties(
@@ -697,6 +710,11 @@ COLUMNS = {
     ),
 }
 
+COLUMNS = {}
+
+# Merge input and performance columns
+COLUMNS.update(INPUT_COLUMNS)
+COLUMNS.update(PERFORMANCE_METRIC_COLUMNS)
 
 @dataclass
 class SLO:

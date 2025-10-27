@@ -11,9 +11,14 @@ import src.config_explorer.plotting as xplotting
 BENCHMARK_PATH_KEY = "benchmark_path"
 BENCHMARK_DATA_KEY = "benchmark_data"
 SELECTED_SCENARIO_KEY = "selected_scenario"
+SELECTED_SLO_METRICS_KEY = "selected_slo_metrics"
 
 # ------- Scenario presets -------
 
+DEFAULT_SLOS = [
+    'Total_Token_Throughput',
+    'P90_TTFT_ms',
+    ]
 PD_DISAGG = "PD Disaggregation"
 INFERENCE_SCHEDULING = "Inference Scheduling"
 
@@ -62,29 +67,29 @@ preset_scenarios = {
         "output_len": 300,
         "system_prompt_length": 2048,
         "question_length": 100,
-        "e2e_latency": 100,
-        "throughput": 100,
-        "ttft": 2000,
-        "itl": 50,
+        "P90_E2EL_ms": 100.0,
+        "Total_Token_Throughput": 100.0,
+        "P90_TTFT_ms": 2000.0,
+        "P90_ITL_ms": 50.0,
         },
     "Document summarization": {
         "description": "This application maps to workload requests with high input length and short output length.",
         "input_len": 9999,
         "output_len": 1000,
         "max_qps": float64(5),
-        "e2e_latency": 100000,
-        "throughput": 100,
-        "ttft": 10000,
-        "itl": 100,
+        "P90_E2EL_ms": 100000.0,
+        "Total_Token_Throughput": 100.0,
+        "P90_TTFT_ms": 10000.0,
+        "P90_ITL_ms": 100.0,
         },
     "Custom": {
         "description": "Design the workload patterns for your own custom application type.",
         "input_len": 300,
         "output_len": 1000,
-        "e2e_latency": 200,
-        "throughput": 200,
-        "ttft": 1000,
-        "itl": 50,
+        "P90_E2EL_ms": 200.0,
+        "Total_Token_Throughput": 200.0,
+        "P90_TTFT_ms": 1000.0,
+        "P90_ITL_ms": 50.0,
     }
 }
 
@@ -94,6 +99,10 @@ def init_session_state():
     """
     if BENCHMARK_DATA_KEY not in st.session_state:
         st.session_state[BENCHMARK_DATA_KEY] = xp.make_benchmark_runs_df()
+
+    # Default SLOs
+    if SELECTED_SLO_METRICS_KEY not in st.session_state:
+        st.session_state[SELECTED_SLO_METRICS_KEY] = DEFAULT_SLOS
 
 @st.cache_data
 def read_benchmark_path(benchmark_path: str) -> DataFrame:
@@ -135,6 +144,52 @@ def user_benchmark_path():
             except Exception:
                 st.toast("File not found, please double check path.", icon='⚠️')
 
+
+@st.dialog("Add SLO metric")
+def add_metric_dialog():
+    """
+    Dialogue to add a SLO metric
+    """
+
+    st.write(":blue[Add custom metrics to further filter for performance.] \
+    For example, chatbot user may care about TTFT, while a summarization tool may care more about mean throughput. \
+    For repeated metrics, the value that is defined later on in the list will be used for analysis.")
+
+    curr_metrics = st.session_state[SELECTED_SLO_METRICS_KEY]
+
+    # Remove curr metrics from all performance metrics
+
+    all_metrics =  dict(xp.PERFORMANCE_METRIC_COLUMNS)
+    for metric in curr_metrics:
+        all_metrics.pop(metric, None)   # None avoids KeyError if key is missing
+
+    to_add = st.selectbox("Select a metric to add",
+                          options=all_metrics.keys(),
+                          format_func=lambda p: xp.PERFORMANCE_METRIC_COLUMNS[p].label_with_units(),
+                          )
+    if st.button("Add", use_container_width=True, type='primary'):
+        st.session_state[SELECTED_SLO_METRICS_KEY].append(to_add)
+        st.rerun()
+
+@st.dialog("Delete SLO metric")
+def delete_metric_dialog():
+    """
+    Dialogue to delete a SLO metric
+    """
+
+    st.write(f"Deleting a metric means that the optimal configuration does not take this metric into account. Any of the non-default (`{", ".join(DEFAULT_SLOS)}`) metrics can be deleted.\n\nIf you'd like to disable the default metrics, set them to an extremely high or low value to disable their effect.")
+
+    curr_metrics = st.session_state[SELECTED_SLO_METRICS_KEY]
+
+    to_delete = st.selectbox("Select a metric to delete",
+                          options=curr_metrics,
+                          format_func=lambda p: xp.PERFORMANCE_METRIC_COLUMNS[p].label_with_units(),
+                          )
+
+    if st.button("Delete", use_container_width=True, type='primary'):
+        st.session_state[SELECTED_SLO_METRICS_KEY].remove(to_delete)
+        st.rerun()
+
 def filter_data_on_inputs(data: DataFrame, user_inputs: dict) -> DataFrame:
     """
     Filters data on inputs and SLOs
@@ -146,7 +201,6 @@ def filter_data_on_inputs(data: DataFrame, user_inputs: dict) -> DataFrame:
         (data['Num_GPUs'] <= user_inputs['num_gpus']) &
         (data['ISL'] >= user_inputs['isl']) &
         (data['OSL'] >= user_inputs['osl'])
-        # (data['Max_QPS'] <= user_inputs['max_qps'])
         ]
 
 def inputs(tab: DeltaGenerator):
@@ -158,6 +212,8 @@ def inputs(tab: DeltaGenerator):
     tab.caption("Select initial filters on benchmarking data such as model and workload characteristics.")
 
     benchmark_data = st.session_state[BENCHMARK_DATA_KEY]
+    data_to_return = {}
+    selected_slos = {}
     scenario_to_return = {}
 
     if len(benchmark_data) == 0:
@@ -175,12 +231,6 @@ def inputs(tab: DeltaGenerator):
             options=benchmark_data['GPU'].unique()
         )
 
-        # selected_num_gpus = st.number_input(
-        #     "Select max accelerator count",
-        #     value=16,
-        #     min_value=1
-        #     )
-
     with tab.container(border=True):
         st.write("**Workload Profiles**")
         st.caption("Define the type of workload for the LLM. Based on the model and environment inputs, the available options are shown below.")
@@ -189,22 +239,11 @@ def inputs(tab: DeltaGenerator):
         runs = benchmark_data[
             (benchmark_data["Model"] == scenario_to_return['Model']) &
             (benchmark_data["GPU"] == scenario_to_return['GPU'])
-            # & (benchmark_data["Num_GPUs"] <= selected_num_gpus)
         ]
-        # scenarios = xp.get_scenarios(runs, ['Model', "GPU", "Num_GPUs", "ISL_500", "OSL_500"])
-
-        # with st.expander("Input/output sequence summary"):
-        #     st.write("View the available input and output sequence length pairs in the benchmark data. \
-        #              Sequence length within the same 500 tokens are binned together.")
-        #     st.table(scenarios)
 
         selected_workload = st.radio("Select workload", options=preset_scenarios.keys())
 
         info = preset_scenarios[selected_workload]
-        e2e_latency = info['e2e_latency']
-        throughput = info['throughput']
-        ttft = info['ttft']
-        itl = info['itl']
 
         st.caption(info['description'])
 
@@ -261,37 +300,36 @@ def inputs(tab: DeltaGenerator):
     # SLOs
     with tab.container(border=True):
         st.write("**Goals / SLOs**")
-        st.caption("Define the desire constraints to reach for your application. Default values are suggested for the given application type. If you'd like to disregard a metric, set it to an extremely high or low value depending on the direction of the metric.")
+        st.caption("Define the desire constraints to reach for your application. Default values for a selective set of SLO metrics are suggested for the given application type.")
 
         if selected_workload:
             scenario = preset_scenarios[selected_workload]
 
-            col1, col2 = st.columns(2)
-            throughput = col1.number_input("Throughput (total tokens/s)",
-                                         value=scenario['throughput'],
-                                         min_value=1,
-                                         )
-            e2e_latency = col2.number_input("P90 End-to-End latency",
-                                value=scenario['e2e_latency'],
-                                min_value=0,
-                                )
-            ttft = col1.number_input("P90 TTFT (ms)",
-                        value=scenario['ttft'],
-                        min_value=0,
-                        )
-            itl = col2.number_input("P90 ITL (ms)",
-                        value=scenario['itl'],
-                        min_value=0,
-                        )
+            # Display SLO metrics
+            for metric in st.session_state[SELECTED_SLO_METRICS_KEY]:
+                metric_prop = xp.PERFORMANCE_METRIC_COLUMNS[metric]
+                metric_value = 0.0
 
-    data_to_return = {
-        "scenario": scenario_to_return,
-        "e2e_latency": e2e_latency,
-        "ttft": ttft,
-        "itl": itl,
-        "throughput": throughput,
-    }
+                # If there is a default, show the default value
+                if metric in scenario:
+                    metric_value = scenario[metric]
 
+                selected_slos[metric] = st.number_input(
+                    metric_prop.label_with_units(),
+                    value=metric_value,
+                    key=metric,
+                    min_value=0.0,
+                    step=0.01,
+            )
+
+            if st.button("Add a metric", use_container_width=True):
+                add_metric_dialog()
+
+            if st.button("Delete a metric", use_container_width=True):
+                delete_metric_dialog()
+
+    data_to_return["scenario"] = scenario_to_return
+    data_to_return["slo"] = selected_slos
     return data_to_return
 
 def display_optimal_config_overview(container: DeltaGenerator,
@@ -308,12 +346,11 @@ def display_optimal_config_overview(container: DeltaGenerator,
     container.subheader("Examine optimal configuration")
 
     # Define SLOs
-    slos = [
-        xp.SLO('P90_TTFT_ms', user_inputs['ttft']),
-        xp.SLO('P90_ITL_ms', user_inputs['itl']),
-        xp.SLO('Total_Token_Throughput', user_inputs['throughput']),
-        xp.SLO('P90_E2EL_ms', user_inputs['e2e_latency']),
-    ]
+    slos = []
+    for metric, value in user_inputs["slo"].items():
+        slos.append(
+            xp.SLO(metric, value)
+        )
 
     # Columns for metrics of interest to optimize
     col_x = 'Mean_TTFT_ms'
@@ -322,6 +359,20 @@ def display_optimal_config_overview(container: DeltaGenerator,
     # Select linear or log scales
     log_x = True
     log_y = False
+
+    metric_col1, metric_col2 = container.columns(2)
+
+    col_y = metric_col1.selectbox("Select y-axis performance metric for Pareto front",
+                    options=xp.PERFORMANCE_METRIC_COLUMNS.keys(),
+                    index=list(xp.PERFORMANCE_METRIC_COLUMNS.keys()).index(col_y),
+                    format_func=lambda p: xp.PERFORMANCE_METRIC_COLUMNS[p].label_with_units(),
+    )
+
+    col_x = metric_col2.selectbox("Select x-axis input metric for Pareto front",
+                    options=xp.PERFORMANCE_METRIC_COLUMNS.keys(),
+                    index=list(xp.PERFORMANCE_METRIC_COLUMNS.keys()).index(col_x),
+                    format_func=lambda p: f"{xp.PERFORMANCE_METRIC_COLUMNS[p].label}",
+    )
 
     # Configuration columns of interest
     tradeoff_plot = xplotting.plot_pareto_tradeoff(
@@ -351,7 +402,7 @@ def display_optimal_config_overview(container: DeltaGenerator,
     # Display info
     container.info(f"Out of the {len(runs_meet_slo)} configurations that meet SLO requirements, {len(runs_pareto_front)} are optimal, meaning no metric can be improved without degrading another. Their configuration and performance metrics are shown below.")
 
-    container.dataframe(runs_pareto_front[columns_of_interest], hide_index=True)
+    container.dataframe(runs_pareto_front[columns_of_interest])
 
 def outputs(tab: DeltaGenerator, user_inputs: dict):
     """
@@ -386,19 +437,32 @@ def outputs(tab: DeltaGenerator, user_inputs: dict):
 
         scenario_preset = scenarios_config_keys_mapping[selected_display_preset]
         user_selected_scenario = user_inputs['scenario']
-
-
         if selected_display_preset == PD_DISAGG:
 
             tab1.write("""The prefill/decode disaggregation scenario compares the effects of :blue[aggregate] inference vs. :blue[disaggregated] inference.""")
 
-            tab1.subheader("Performance comparison (Throughput/GPU vs. Concurrency)")
+            tab1.subheader("Performance comparison")
+
+            metric_col1, metric_col2 = tab1.columns(2)
+
+            col_y = metric_col1.selectbox("Select y-axis performance metric",
+                            options=xp.PERFORMANCE_METRIC_COLUMNS.keys(),
+                            index=list(xp.PERFORMANCE_METRIC_COLUMNS.keys()).index(scenario_preset['col_y']),
+                            format_func=lambda p: xp.PERFORMANCE_METRIC_COLUMNS[p].label_with_units(),
+                )
+
+            col_x = metric_col2.selectbox("Select x-axis input metric",
+                            options=xp.INPUT_COLUMNS.keys(),
+                            index=list(xp.INPUT_COLUMNS.keys()).index(scenario_preset['col_x']),
+                            format_func=lambda p: f"{xp.INPUT_COLUMNS[p].label}",
+                )
+
             plot = xplotting.plot_scenario(
                 runs_df=original_benchmark_data,
                 scenario=user_selected_scenario,
                 config_keys=scenario_preset['config_keys'],
-                col_x=scenario_preset['col_x'],
-                col_y=scenario_preset['col_y'],
+                col_x=col_x,
+                col_y=col_y,
                 col_seg_by=scenario_preset['col_seg_by'],
             )
             tab1.pyplot(plot)
@@ -406,13 +470,32 @@ def outputs(tab: DeltaGenerator, user_inputs: dict):
             tab1.divider()
 
             tab1.subheader("Performance tradeoff comparison")
+            metric_col1, metric_col2, metric_col3 = tab1.columns(3)
+            tradeoff_y = metric_col1.selectbox("Select y-axis performance tradeoff metric",
+                            options=xp.PERFORMANCE_METRIC_COLUMNS.keys(),
+                            index=list(xp.PERFORMANCE_METRIC_COLUMNS.keys()).index(scenario_preset['pareto']['col_y']),
+                            format_func=lambda p: xp.PERFORMANCE_METRIC_COLUMNS[p].label_with_units(),
+                )
+
+            tradeoff_x = metric_col2.selectbox("Select x-axis performance tradeoff metric",
+                            options=xp.PERFORMANCE_METRIC_COLUMNS.keys(),
+                            index=list(xp.PERFORMANCE_METRIC_COLUMNS.keys()).index(scenario_preset['pareto']['col_x']),
+                            format_func=lambda p: xp.PERFORMANCE_METRIC_COLUMNS[p].label_with_units(),
+                )
+
+            tradeoff_z = metric_col3.selectbox("Select z-axis input metric (point label)",
+                            options=xp.INPUT_COLUMNS.keys(),
+                            index=list(xp.INPUT_COLUMNS.keys()).index(scenario_preset['pareto']['col_z']),
+                            format_func=lambda p: xp.INPUT_COLUMNS[p].label,
+                )
+
             tradeoff_plot = xplotting.plot_scenario_tradeoff(
                 runs_df=original_benchmark_data,
                 scenario=user_selected_scenario,
                 config_keys=scenario_preset['config_keys'],
-                col_x=scenario_preset['pareto']['col_x'],
-                col_y=scenario_preset['pareto']['col_y'],
-                col_z=scenario_preset['pareto']['col_z'],
+                col_x=tradeoff_x,
+                col_y=tradeoff_y,
+                col_z=tradeoff_z,
                 col_seg_by=scenario_preset['col_seg_by'],
             )
             tab1.pyplot(tradeoff_plot)
@@ -422,13 +505,27 @@ def outputs(tab: DeltaGenerator, user_inputs: dict):
             slos_cols = ['Mean_TTFT_ms', 'Thpt_per_GPU', 'Num_GPUs']
 
         if selected_display_preset == INFERENCE_SCHEDULING:
-            tab1.subheader("Performance comparison (QPS vs. TTFT)")
+            tab1.subheader("Performance comparison")
+
+            metric_col1, metric_col2 = tab1.columns(2)
+
+            col_y = metric_col1.selectbox("Select y-axis performance metric",
+                            options=xp.PERFORMANCE_METRIC_COLUMNS.keys(),
+                            index=list(xp.PERFORMANCE_METRIC_COLUMNS.keys()).index(scenario_preset['col_y']),
+                            format_func=lambda p: xp.PERFORMANCE_METRIC_COLUMNS[p].label_with_units(),
+                )
+
+            col_x = metric_col2.selectbox("Select x-axis input metric",
+                            options=xp.INPUT_COLUMNS.keys(),
+                            index=list(xp.INPUT_COLUMNS.keys()).index(scenario_preset['col_x']),
+                            format_func=lambda p: f"{xp.INPUT_COLUMNS[p].label}",
+                )
             plot = xplotting.plot_scenario(
                 runs_df=original_benchmark_data,
                 scenario=user_selected_scenario,
                 config_keys=scenario_preset['config_keys'],
-                col_x=scenario_preset['col_x'],
-                col_y=scenario_preset['col_y'],
+                col_x=col_x,
+                col_y=col_y,
                 col_seg_by=scenario_preset['col_seg_by'],
             )
             tab1.pyplot(plot)
@@ -437,13 +534,32 @@ def outputs(tab: DeltaGenerator, user_inputs: dict):
             tab1.divider()
 
             tab1.subheader("Performance tradeoff comparison")
+            metric_col1, metric_col2, metric_col3 = tab1.columns(3)
+            tradeoff_y = metric_col1.selectbox("Select y-axis performance tradeoff metric",
+                            options=xp.PERFORMANCE_METRIC_COLUMNS.keys(),
+                            index=list(xp.PERFORMANCE_METRIC_COLUMNS.keys()).index(scenario_preset['pareto']['col_y']),
+                            format_func=lambda p: xp.PERFORMANCE_METRIC_COLUMNS[p].label_with_units(),
+                )
+
+            tradeoff_x = metric_col2.selectbox("Select x-axis performance tradeoff metric",
+                            options=xp.PERFORMANCE_METRIC_COLUMNS.keys(),
+                            index=list(xp.PERFORMANCE_METRIC_COLUMNS.keys()).index(scenario_preset['pareto']['col_x']),
+                            format_func=lambda p: xp.PERFORMANCE_METRIC_COLUMNS[p].label_with_units(),
+                )
+
+            tradeoff_z = metric_col3.selectbox("Select z-axis input metric (point label)",
+                            options=xp.INPUT_COLUMNS.keys(),
+                            index=list(xp.INPUT_COLUMNS.keys()).index(scenario_preset['pareto']['col_z']),
+                            format_func=lambda p: xp.INPUT_COLUMNS[p].label,
+                )
+
             tradeoff_plot = xplotting.plot_scenario_tradeoff(
                 runs_df=original_benchmark_data,
                 scenario=user_selected_scenario,
                 config_keys=scenario_preset['config_keys'],
-                col_x=scenario_preset['pareto']['col_x'],
-                col_y=scenario_preset['pareto']['col_y'],
-                col_z=scenario_preset['pareto']['col_z'],
+                col_x=tradeoff_x,
+                col_y=tradeoff_y,
+                col_z=tradeoff_z,
                 col_seg_by=scenario_preset['col_seg_by'],
             )
             tab1.pyplot(tradeoff_plot)
