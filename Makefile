@@ -500,11 +500,7 @@ test-e2e: ## Run end-to-end tests (requires cluster)
 
 test-workflow: setup-ollama ## Run workflow integration test
 	@printf "$(BLUE)Running workflow test...$(NC)\n"
-	cd $(SRC_DIR) && uv run $(PYTHON) test_workflow.py
-
-test-watch: ## Run tests in watch mode
-	@printf "$(BLUE)Running tests in watch mode...$(NC)\n"
-	cd $(SRC_DIR) && uv run pytest-watch
+	cd $(SRC_DIR) && uv run pytest ../tests/test_recommendation_workflow.py -v
 
 ##@ Code Quality
 

@@ -408,15 +408,7 @@ Test the complete recommendation workflow:
 make test-workflow
 ```
 
-This runs `test_workflow.py` which tests all 3 demo scenarios.
-
-### Watch Mode
-
-Run tests continuously on file changes:
-
-```bash
-make test-watch
-```
+This runs `tests/test_recommendation_workflow.py` which tests all 3 demo scenarios.
 
 ## Debugging
 
@@ -808,8 +800,7 @@ Then open http://localhost:8501 in your browser.
 Test the complete recommendation workflow with demo scenarios:
 
 ```bash
-source venv/bin/activate
-python test_workflow.py
+uv run pytest tests/test_recommendation_workflow.py -v
 ```
 
 This tests all 3 demo scenarios end-to-end.
@@ -1031,8 +1022,7 @@ Then deploy to a GPU-enabled cluster with:
 
 ```bash
 # Test end-to-end workflow
-source venv/bin/activate
-python tests/test_workflow.py
+uv run pytest tests/test_recommendation_workflow.py -v
 
 # Test FastAPI endpoints
 scripts/run_api.sh  # Start server in terminal 1
