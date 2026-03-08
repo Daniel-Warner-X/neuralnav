@@ -129,4 +129,5 @@ asyncio_default_fixture_loop_scope = "session"
 markers = [
     "database: marks tests that require a running PostgreSQL database with benchmark data",
     "integration: marks tests as integration tests (requires Ollama and database)",
+    "unit: marks tests as unit tests (no external dependencies)",
 ]
