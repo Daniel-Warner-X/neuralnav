@@ -46,12 +46,14 @@ def render_deployment_management_tab():
         status = dep.get("status", {})
         pods = dep.get("pods", [])
         ready = status.get("ready", False)
-        table_data.append({
-            "Status": "Ready" if ready else "Pending",
-            "Name": dep["deployment_id"],
-            "Pods": len(pods),
-            "Ready": "Yes" if ready else "No",
-        })
+        table_data.append(
+            {
+                "Status": "Ready" if ready else "Pending",
+                "Name": dep["deployment_id"],
+                "Pods": len(pods),
+                "Ready": "Yes" if ready else "No",
+            }
+        )
 
     df = pd.DataFrame(table_data)
     st.dataframe(df, use_container_width=True, hide_index=True)
@@ -257,14 +259,21 @@ def _run_inference_test(deployment_id: str, prompt: str, max_tokens: int, temper
             start_time = time.time()
 
             curl_cmd = [
-                "curl", "-s", "-X", "POST",
+                "curl",
+                "-s",
+                "-X",
+                "POST",
                 "http://localhost:8080/v1/completions",
-                "-H", "Content-Type: application/json",
-                "-d", json.dumps({
-                    "prompt": prompt,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                }),
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                json.dumps(
+                    {
+                        "prompt": prompt,
+                        "max_tokens": max_tokens,
+                        "temperature": temperature,
+                    }
+                ),
             ]
 
             with st.expander("Debug Info"):

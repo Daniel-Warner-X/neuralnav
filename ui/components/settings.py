@@ -33,7 +33,10 @@ def render_configuration_tab():
         result = update_deployment_mode(new_mode)
         if result:
             st.session_state.deployment_mode_selection = st.session_state.deployment_mode_radio
-            st.session_state["_mode_msg"] = ("success", f"Deployment mode set to **{st.session_state.deployment_mode_radio}**.")
+            st.session_state["_mode_msg"] = (
+                "success",
+                f"Deployment mode set to **{st.session_state.deployment_mode_radio}**.",
+            )
         else:
             st.session_state["_mode_msg"] = ("error", "Failed to update deployment mode.")
         st.session_state["_pending_tab"] = _TAB_INDEX
