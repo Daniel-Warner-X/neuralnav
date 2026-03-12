@@ -47,6 +47,7 @@ class UseCaseQualityScorer:
     def __init__(self):
         """Initialize the scorer with cached data."""
         self._cache: dict[str, dict[str, float]] = {}
+        self._catalog_fallback: dict[str, float] = {}
         self._load_all_scores()
 
     def _load_all_scores(self):
@@ -95,6 +96,20 @@ class UseCaseQualityScorer:
             logger.error(f"Error loading {filepath}: {e}")
 
         return scores
+
+    def set_catalog_fallback(self, scores: dict[str, float]) -> None:
+        """Set catalog-sourced quality scores as a fallback.
+
+        These scores are only used when a model has no CSV match.
+        Values are normalized to the 0-100 scale (inputs <= 1.0 are
+        treated as fractions and scaled up).
+        """
+        normalized: dict[str, float] = {}
+        for k, v in scores.items():
+            score = v * 100.0 if 0 < v <= 1.0 else v
+            normalized[k.lower()] = min(100.0, max(0.0, score))
+        self._catalog_fallback = normalized
+        logger.info("Set catalog fallback scores for %d models", len(self._catalog_fallback))
 
     # Benchmark model variant to AA model mapping (for ALL 40 Red Hat DB models)
     BENCHMARK_TO_AA_MAP = {
@@ -263,6 +278,15 @@ class UseCaseQualityScorer:
                 f"Partial match {model_name} -> {best_match} (size_match={best_has_size_match})"
             )
             return best_score
+
+        # Check catalog fallback (try full name, then base model)
+        if self._catalog_fallback:
+            fallback = self._catalog_fallback.get(model_lower, 0.0)
+            if fallback <= 0:
+                fallback = self._catalog_fallback.get(base_model, 0.0)
+            if fallback > 0:
+                logger.debug(f"Using catalog fallback score for {model_name}: {fallback}")
+                return fallback
 
         # No valid AA data found - return 0 to indicate missing data
         # This allows filtering out models without quality scores

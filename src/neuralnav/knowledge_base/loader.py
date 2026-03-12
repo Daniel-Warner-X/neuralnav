@@ -23,7 +23,7 @@ def generate_config_id(benchmark: dict) -> str:
         f"{benchmark['hardware_count']}_{benchmark['prompt_tokens']}_"
         f"{benchmark['output_tokens']}_{benchmark.get('requests_per_second', '')}"
     )
-    return hashlib.md5(config_str.encode()).hexdigest()
+    return hashlib.sha256(config_str.encode()).hexdigest()[:32]
 
 
 def normalize_benchmark_fields(benchmark: dict) -> dict:
@@ -97,6 +97,7 @@ def prepare_benchmark_for_insert(benchmark: dict) -> dict:
     prepared.setdefault("profiler_type", None)
     prepared.setdefault("profiler_image", None)
     prepared.setdefault("profiler_tag", None)
+    prepared["source"] = "local"
 
     return prepared
 
@@ -117,7 +118,8 @@ _INSERT_QUERY = """
         created_at, updated_at, loaded_at,
         prompt_tokens, prompt_tokens_stdev, prompt_tokens_min, prompt_tokens_max,
         output_tokens, output_tokens_min, output_tokens_max, output_tokens_stdev,
-        profiler_type, profiler_image, profiler_tag
+        profiler_type, profiler_image, profiler_tag,
+        source
     ) VALUES (
         %(id)s, %(config_id)s, %(model_hf_repo)s, %(provider)s, %(type)s,
         %(ttft_mean)s, %(ttft_p90)s, %(ttft_p95)s, %(ttft_p99)s,
@@ -132,7 +134,8 @@ _INSERT_QUERY = """
         %(created_at)s, %(updated_at)s, %(loaded_at)s,
         %(prompt_tokens)s, %(prompt_tokens_stdev)s, %(prompt_tokens_min)s, %(prompt_tokens_max)s,
         %(output_tokens)s, %(output_tokens_min)s, %(output_tokens_max)s, %(output_tokens_stdev)s,
-        %(profiler_type)s, %(profiler_image)s, %(profiler_tag)s
+        %(profiler_type)s, %(profiler_image)s, %(profiler_tag)s,
+        %(source)s
     )
     ON CONFLICT (config_id) DO NOTHING;
 """

@@ -19,6 +19,7 @@ TODO (Phase 2+): Parametric Performance Models
 
 import logging
 import math
+from typing import Protocol
 
 from neuralnav.knowledge_base.benchmarks import BenchmarkData, BenchmarkRepository
 from neuralnav.knowledge_base.model_catalog import ModelCatalog, ModelInfo
@@ -38,21 +39,33 @@ from .scorer import Scorer
 logger = logging.getLogger(__name__)
 
 
+class QualityScorer(Protocol):
+    """Protocol for quality scoring backends."""
+
+    def get_quality_score(self, model_name: str, use_case: str) -> float: ...
+
+
 class ConfigFinder:
     """Plan GPU capacity to meet SLO targets and traffic requirements."""
 
     def __init__(
-        self, benchmark_repo: BenchmarkRepository | None = None, catalog: ModelCatalog | None = None
+        self,
+        benchmark_repo: BenchmarkRepository | None = None,
+        catalog: ModelCatalog | None = None,
+        quality_scorer: QualityScorer | None = None,
     ):
         """
         Initialize capacity planner.
 
         Args:
-            benchmark_repo: Benchmark repository
+            benchmark_repo: PostgreSQL benchmark repository.
             catalog: Model catalog
+            quality_scorer: Optional scorer with get_quality_score(model_name, use_case) method.
+                           When provided, replaces the default UseCaseQualityScorer.
         """
         self.benchmark_repo = benchmark_repo or BenchmarkRepository()
         self.catalog = catalog or ModelCatalog()
+        self._quality_scorer = quality_scorer
 
     def _calculate_required_replicas(self, qps_per_replica: float, required_qps: float) -> int:
         """
@@ -65,6 +78,9 @@ class ConfigFinder:
         Returns:
             Number of replicas (minimum 1)
         """
+        if qps_per_replica <= 0:
+            return 0  # Infeasible: cannot serve positive throughput
+
         # Add 20% headroom for safety
         headroom_factor = 1.2
         required_capacity = required_qps * headroom_factor
@@ -205,6 +221,8 @@ class ConfigFinder:
             replicas = self._calculate_required_replicas(
                 bench.requests_per_second, traffic_profile.expected_qps or 1.0
             )
+            if replicas == 0:
+                continue  # Zero-throughput benchmark — infeasible config
 
             # Create GPU config - gpu_count is PER REPLICA, not total
             gpu_config = GPUConfig(
@@ -246,18 +264,24 @@ class ConfigFinder:
             if slo_status == "exceeds" and not include_near_miss:
                 continue
 
-            # Calculate accuracy score - USE RAW AA BENCHMARK SCORE
-            # This is the actual model accuracy from Artificial Analysis benchmarks
+            # Calculate accuracy score - USE RAW BENCHMARK SCORE
+            # This is the actual model accuracy from benchmarks (AA or Model Catalog)
             # NOT a composite score with latency/budget bonuses
-            from .quality import score_model_quality
-
-            # Try to get raw AA score using the benchmark model name
             model_name_for_scoring = model.name if model else bench.model_hf_repo
-            raw_accuracy = score_model_quality(model_name_for_scoring, intent.use_case)
+            if self._quality_scorer is not None:
+                raw_accuracy = self._quality_scorer.get_quality_score(
+                    model_name_for_scoring, intent.use_case
+                )
+                if raw_accuracy == 0 and bench.model_hf_repo:
+                    raw_accuracy = self._quality_scorer.get_quality_score(
+                        bench.model_hf_repo, intent.use_case
+                    )
+            else:
+                from .quality import score_model_quality
 
-            # If no score found, try with benchmark's model_hf_repo
-            if raw_accuracy == 0 and bench.model_hf_repo:
-                raw_accuracy = score_model_quality(bench.model_hf_repo, intent.use_case)
+                raw_accuracy = score_model_quality(model_name_for_scoring, intent.use_case)
+                if raw_accuracy == 0 and bench.model_hf_repo:
+                    raw_accuracy = score_model_quality(bench.model_hf_repo, intent.use_case)
 
             accuracy_score = int(raw_accuracy)
 

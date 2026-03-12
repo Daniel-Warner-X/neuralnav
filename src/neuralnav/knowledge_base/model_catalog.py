@@ -337,3 +337,24 @@ class ModelCatalog:
             * total_gpus
             * hours_per_month,
         }
+
+    def merge_external_models(self, models: list[ModelInfo]) -> int:
+        """Merge externally-sourced models into the catalog.
+
+        Local JSON models take precedence -- external models with
+        duplicate model_ids are skipped.  Builds a new dict and swaps
+        atomically so concurrent readers never see a partial update.
+
+        Returns:
+            Number of new models actually added.
+        """
+        merged = dict(self._models)
+        added = 0
+        for model in models:
+            if model.model_id not in merged:
+                merged[model.model_id] = model
+                added += 1
+        if added:
+            self._models = merged
+            logger.info("Merged %d external models into catalog", added)
+        return added
