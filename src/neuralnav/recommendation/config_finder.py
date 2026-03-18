@@ -162,6 +162,9 @@ class ConfigFinder:
             near_miss_tolerance: How much over SLO to allow (0.2 = 20%)
             weights: Custom weights for balanced score (0-10 scale)
                      Keys: accuracy, price, latency, complexity
+            cluster_gpu_types: Detected GPU types from cluster (None = detection
+                not attempted, [] = no GPUs detected, non-empty = hard filter
+                intersected with user preferences)
 
         Returns:
             List of DeploymentRecommendations with scores attached

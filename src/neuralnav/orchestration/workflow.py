@@ -2,6 +2,7 @@
 
 import logging
 
+from neuralnav.cluster.gpu_detector import detect_cluster_gpus
 from neuralnav.intent_extraction import IntentExtractor
 from neuralnav.llm.ollama_client import OllamaClient
 from neuralnav.recommendation.analyzer import Analyzer
@@ -174,12 +175,15 @@ class RecommendationWorkflow:
 
         # Generate all viable configurations with full scoring
         # No model pre-filtering - all benchmark configs meeting SLO are scored
+        # Detect cluster GPUs for filtering
+        cluster_gpu_types = detect_cluster_gpus()
         logger.info("Generating all viable configurations")
         all_configs = self.config_finder.plan_all_capacities(
             traffic_profile=traffic_profile,
             slo_targets=slo_targets,
             intent=intent,
             include_near_miss=False,  # Strict SLO for best recommendation
+            cluster_gpu_types=cluster_gpu_types,
         )
 
         if not all_configs:
@@ -260,12 +264,15 @@ class RecommendationWorkflow:
 
         # Get ALL configurations with scores
         # No model pre-filtering - all benchmark configs meeting SLO are scored
+        # Detect cluster GPUs for filtering
+        cluster_gpu_types = detect_cluster_gpus()
         logger.info("Planning capacity for all model/GPU combinations")
         all_configs = self.config_finder.plan_all_capacities(
             traffic_profile=traffic_profile,
             slo_targets=slo_targets,
             intent=intent,
             include_near_miss=include_near_miss,
+            cluster_gpu_types=cluster_gpu_types,
         )
 
         if not all_configs:
@@ -388,6 +395,8 @@ class RecommendationWorkflow:
         )
 
         # Get ALL configurations with scores
+        # Detect cluster GPUs for filtering
+        cluster_gpu_types = detect_cluster_gpus()
         logger.info("Planning capacity for all model/GPU combinations")
         logger.info(f"Using weights for balanced scoring: {weights}")
         all_configs = self.config_finder.plan_all_capacities(
@@ -396,6 +405,7 @@ class RecommendationWorkflow:
             intent=intent,
             include_near_miss=include_near_miss,
             weights=weights,
+            cluster_gpu_types=cluster_gpu_types,
         )
 
         if not all_configs:
