@@ -12,6 +12,38 @@ from helpers import format_display_name, format_gpu_config, get_scores
 _RECOMMENDATION_TAB_INDEX = 2
 _DEPLOYMENT_TAB_INDEX = 3
 
+# Emerald green for active-selection checks (header, cards, viable-configs table)
+_CHECK_GREEN = "#10B981"
+# U+2713 CHECK MARK — inside circle (table cells, HTML spans); button uses CSS ::before
+_CHECK_MARK = "\u2713"
+
+# Filter subhead: one flex row so stats, pipes, and “Selected” share vertical alignment
+_FILTER_SUBHEAD_ROW_STYLE = (
+    "margin: 0; padding: 0; line-height: 1.45; display: flex; flex-wrap: wrap; "
+    "align-items: center; gap: 0.65em;"
+)
+
+
+def _check_circle_html() -> str:
+    """White check on solid green circle (reversed-out style) for markdown HTML."""
+    return (
+        f'<span style="display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;'
+        f"min-width:1.15em;min-height:1.15em;padding:0 0.2em;border-radius:50%;"
+        f"background:{_CHECK_GREEN};color:#fff;font-size:0.7em;font-weight:700;line-height:1;"
+        f'">{_CHECK_MARK}</span>'
+    )
+
+
+# "Selected" card button (scoped via st.container key nn_card_selected_*)
+_CHECK_SELECTED_BUTTON_BG = "#e4f6ee"
+# Balance card "Recommended" badge (first ranked model)
+_RECOMMENDED_BADGE_BG = "rgb(134, 172, 175)"
+_RECOMMENDED_BADGE_FG = "white"
+# Highlighted score on the active category line (cards)
+_CARD_SCORE_HIGHLIGHT = "rgb(19, 172, 119)"
+# Filter summary subhead numbers (bold black, not selection green)
+_SUBHEAD_NUM_STYLE = "font-weight: 700; color: #000;"
+
 
 def _pop_viable_configs_table_state() -> None:
     """Clear legacy session keys if present (table no longer uses selectable dataframe widget)."""
@@ -91,12 +123,12 @@ def _build_viable_configs_table_data(ranked_response: dict) -> list[dict]:
     return table_data
 
 
-def _viable_configs_display_dataframe(table_data: list[dict]) -> pd.DataFrame:
-    """Read-only table; ✓ marks the row matching the active deployment (from cards)."""
-    return pd.DataFrame(
+def _viable_configs_display_dataframe(table_data: list[dict]):
+    """Read-only table; selected row is mint; ✓ column uses green ring + green check (Streamlit-safe)."""
+    df = pd.DataFrame(
         {
-            "✓": [
-                "✓" if _row_matches_selected_config(r["cat_key"], r["model"], r["gpu_config"]) else ""
+            _CHECK_MARK: [
+                _CHECK_MARK if _row_matches_selected_config(r["cat_key"], r["model"], r["gpu_config"]) else ""
                 for r in table_data
             ],
             "Category": [r["category"] for r in table_data],
@@ -110,6 +142,30 @@ def _viable_configs_display_dataframe(table_data: list[dict]) -> pd.DataFrame:
         }
     )
 
+    selected_rows = [
+        _row_matches_selected_config(r["cat_key"], r["model"], r["gpu_config"]) for r in table_data
+    ]
+
+    def _style_table(data: pd.DataFrame) -> pd.DataFrame:
+        out = pd.DataFrame("", index=data.index, columns=data.columns)
+        # Mint cell + green ring (not solid green fill). Green ✓ on mint — white on mint was invisible
+        # when Streamlit dropped background-image gradients on styled cells.
+        circle_on_mint = (
+            f"background-color: {_CHECK_SELECTED_BUTTON_BG}; "
+            f"color: {_CHECK_GREEN}; font-weight: 700; text-align: center; vertical-align: middle; "
+            f"border: 2px solid {_CHECK_GREEN}; border-radius: 999px; padding: 0.15em 0.35em;"
+        )
+        for i in data.index:
+            sel = selected_rows[int(i)]
+            for col in data.columns:
+                if col == _CHECK_MARK and data.loc[i, col] == _CHECK_MARK:
+                    out.loc[i, col] = circle_on_mint
+                elif sel:
+                    out.loc[i, col] = f"background-color: {_CHECK_SELECTED_BUTTON_BG}"
+        return out
+
+    return df.style.hide(axis="index").apply(_style_table, axis=None)
+
 
 def _render_view_deployment_config_button() -> None:
     """Centered primary button below recommendation cards; opens the Deployment tab."""
@@ -121,7 +177,7 @@ def _render_view_deployment_config_button() -> None:
     c_l, c_mid, c_r = st.columns([1, 2, 1])
     with c_mid:
         if st.button(
-            "View Deployment Config",
+            "View Deployment Configuration",
             key="model_rec_goto_deployment",
             type="primary",
             disabled=not has_selection,
@@ -132,10 +188,10 @@ def _render_view_deployment_config_button() -> None:
 
 
 def _render_model_recommendation_header() -> None:
-    """Model Recommendation title, SLO stats, and selected model summary."""
+    """Stats line: configs passed … | N unique models | ✓ Selected: … (single row when data exists)."""
     st.markdown(
-        '<h3 style="font-weight: 600; font-size: 1.375rem; margin: 0 0 0.35rem 0; padding: 0; '
-        'line-height: 1.2; color: var(--text-color, #31333F);">Model Recommendation</h3>',
+        '<h3 style="font-weight: 600; font-size: 1.375rem; margin: 1rem 0 0.35rem 0; padding: 0; '
+        'line-height: 1.2; color: var(--text-color, #31333F);">Configuration Recommendation</h3>',
         unsafe_allow_html=True,
     )
 
@@ -148,9 +204,10 @@ def _render_model_recommendation_header() -> None:
     if selected_cfg and selected_cfg.get("model_name"):
         selected_model = format_display_name(selected_cfg["model_name"])
         selected_html = (
-            '<span style="font-size: 0.85rem; white-space: nowrap;">'
-            '<span style="color: #10B981;">✅</span> Selected: '
-            f"<strong>{selected_model}</strong>"
+            '<span style="font-size: 0.85rem; white-space: nowrap; display: inline-flex; '
+            "align-items: center; gap: 0.35em; line-height: 1.2;\">"
+            f"{_check_circle_html()}"
+            f'<span style="line-height: inherit;">Selected: <strong>{selected_model}</strong></span>'
             "</span>"
         )
 
@@ -163,45 +220,50 @@ def _render_model_recommendation_header() -> None:
         unique_models = len({r.get("model_name", "") for r in all_passed if r.get("model_name")})
         filter_pct = passed_configs / total_configs * 100
         stats_left = (
-            f'<span style="font-size: 0.85rem;"><strong style="color: #10B981;">{passed_configs:,}</strong> '
-            f"configs passed SLO filter from <strong>{total_configs:,}</strong> total "
-            f"<span>({filter_pct:.0f}% match)</span></span>"
+            f'<span style="font-size: 0.85rem;">'
+            f'<strong style="{_SUBHEAD_NUM_STYLE}">{passed_configs:,}</strong> '
+            f"configs passed SLO filter from "
+            f'<strong style="{_SUBHEAD_NUM_STYLE}">{total_configs:,}</strong> total '
+            f'<span>(<strong style="{_SUBHEAD_NUM_STYLE}">{filter_pct:.0f}%</strong> match)</span>'
+            f"</span>"
         )
         bottom_line = (
             f'<span style="font-size: 0.85rem;"><strong>{unique_models}</strong> unique models</span>'
         )
 
-    col_stats, col_actions = st.columns([3, 1])
-    with col_stats:
-        # Keep stats + unique models in this column so a tall right column would not
-        # push the second line down (full-width row below columns would sit under it).
-        if stats_left or bottom_line:
-            parts = []
-            if stats_left:
-                parts.append(f'<div style="margin: 0; padding: 0;">{stats_left}</div>')
-            if bottom_line:
-                parts.append(
-                    f'<div style="margin: 0.35rem 0 0 0; padding: 0;">{bottom_line}</div>'
-                )
-            st.markdown(
-                '<div class="nn-filter-summary" style="margin: 0 0 1rem 0; padding: 0;">'
-                + "".join(parts)
-                + "</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                '<div style="margin: 0 0 1rem 0;"></div>',
-                unsafe_allow_html=True,
-            )
-    with col_actions:
+    pipe = '<span style="color: rgba(49, 51, 63, 0.35);" aria-hidden="true">|</span>'
+
+    parts = []
+    if stats_left and bottom_line:
+        row = [stats_left, pipe, bottom_line]
         if selected_html:
-            st.markdown(
-                '<div style="display: flex; justify-content: flex-end; align-items: center; '
-                'min-height: 2.25rem;">'
-                f"{selected_html}</div>",
-                unsafe_allow_html=True,
-            )
+            row.extend([pipe, selected_html])
+        parts.append(
+            f'<div style="{_FILTER_SUBHEAD_ROW_STYLE}">{"".join(row)}</div>'
+        )
+    elif stats_left:
+        parts.append(f'<div style="margin: 0; padding: 0;">{stats_left}</div>')
+    elif bottom_line and selected_html:
+        parts.append(
+            f'<div style="{_FILTER_SUBHEAD_ROW_STYLE}">{bottom_line}{pipe}{selected_html}</div>'
+        )
+    elif bottom_line:
+        parts.append(f'<div style="margin: 0; padding: 0;">{bottom_line}</div>')
+    elif selected_html:
+        parts.append(f'<div style="margin: 0; padding: 0;">{selected_html}</div>')
+
+    if parts:
+        st.markdown(
+            '<div class="nn-filter-summary" style="margin: 0; padding: 0;">'
+            + "".join(parts)
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div style="margin: 0 0 1rem 0;"></div>',
+            unsafe_allow_html=True,
+        )
 
 
 def _render_category_card(
@@ -250,7 +312,7 @@ def _render_category_card(
     for field, label, value in score_items:
         if field == highlight_field:
             score_parts.append(
-                f'<span style="color: #1f77b4; font-weight: 700;">{label}: {value:.0f}</span>'
+                f'<span style="color: {_CARD_SCORE_HIGHLIGHT}; font-weight: 700;">{label}: {value:.0f}</span>'
             )
         else:
             score_parts.append(f"{label}: {value:.0f}")
@@ -265,13 +327,13 @@ def _render_category_card(
     # Recommended badge only for the first ranked model (index 0); hide after prev/next arrows.
     if show_recommended_badge and idx == 0:
         title_html = (
-            '<div style="display: flex; align-items: center; justify-content: space-between; '
-            'gap: 0.75rem; flex-wrap: wrap; line-height: 1.7;">'
+            '<div style="display: flex; align-items: center; justify-content: flex-start; '
+            'gap: 0.35rem; flex-wrap: wrap; line-height: 1.7;">'
             f'<strong style="font-size: 1.05rem;">{title}</strong>'
-            '<span style="display: inline-block; padding: 0.18rem 0.55rem; font-size: 0.7rem; '
-            "font-weight: 600; letter-spacing: 0.03em; color: #047857; "
-            "background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.35); "
-            'border-radius: 999px; white-space: nowrap;">Recommended</span>'
+            f'<span style="display: inline-block; padding: 0.18rem 0.55rem; font-size: 0.7rem; '
+            f"font-weight: 600; letter-spacing: 0.03em; color: {_RECOMMENDED_BADGE_FG}; "
+            f"background: {_RECOMMENDED_BADGE_BG}; border: none; "
+            f'border-radius: 8px; white-space: nowrap;">\u2605 Recommended</span>'
             "</div>"
         )
     else:
@@ -283,31 +345,40 @@ def _render_category_card(
         # Single st.columns row (no nesting) — Streamlit allows at most one column level inside a column
         if len(recs_list) > 1:
             last = len(recs_list) - 1
-            # One st.columns row only (no nesting). Buttons avoid <a href="?…"> tab breaks / reloads.
-            c_title, c_sp, c_prev, c_lab, c_next = st.columns(
-                [0.3, 0.28, 0.07, 0.12, 0.07], vertical_alignment="center"
-            )
-            with c_title:
-                st.markdown(title_html, unsafe_allow_html=True)
-            with c_sp:
-                st.empty()
-            with c_prev:
-                if st.button("‹", key=f"prev_{category_key}"):
-                    st.session_state[idx_key] = last if idx == 0 else idx - 1
-                    _clear_deployment_after_card_nav()
-                    st.session_state["_pending_tab"] = _RECOMMENDATION_TAB_INDEX
-                    st.rerun()
-            with c_lab:
-                st.markdown(
-                    f"<div style='text-align: center; font-size: 0.85rem; line-height: 1.25; padding: 0; margin: 0; white-space: nowrap; color: inherit;'>#{idx + 1} of {len(recs_list)}</div>",
-                    unsafe_allow_html=True,
+            # Keyed container scopes app.py CSS to ‹ › only (not other 5-col rows e.g. Define Use Case).
+            with st.container(key=f"nn_rec_card_nav_{category_key}"):
+                # One st.columns row only (no nesting). Buttons avoid <a href="?…"> tab breaks / reloads.
+                # Title + spacer + prev | count | next; weights + row gap in app.py control spacing.
+                # Slightly wider middle column for "# of N" text; narrower prev/next so ‹/› sit in tight bands.
+                c_title, c_sp, c_prev, c_lab, c_next = st.columns(
+                    [0.31, 0.27, 0.04, 0.09, 0.04], vertical_alignment="center"
                 )
-            with c_next:
-                if st.button("›", key=f"next_{category_key}"):
-                    st.session_state[idx_key] = 0 if idx == last else idx + 1
-                    _clear_deployment_after_card_nav()
-                    st.session_state["_pending_tab"] = _RECOMMENDATION_TAB_INDEX
-                    st.rerun()
+                with c_title:
+                    st.markdown(title_html, unsafe_allow_html=True)
+                with c_sp:
+                    st.empty()
+                with c_prev:
+                    if st.button("‹", key=f"prev_{category_key}"):
+                        st.session_state[idx_key] = last if idx == 0 else idx - 1
+                        _clear_deployment_after_card_nav()
+                        st.session_state["_pending_tab"] = _RECOMMENDATION_TAB_INDEX
+                        st.rerun()
+                with c_lab:
+                    st.markdown(
+                        f"<div class=\"nn-rec-card-counter\" style=\""
+                        "display: flex; align-items: center; justify-content: flex-start; "
+                        "min-height: 1.25em; line-height: 1; margin: 0; "
+                        "padding: 0; box-sizing: border-box; "
+                        "text-align: center; font-size: 0.85rem; white-space: nowrap; color: inherit;\">"
+                        f"#{idx + 1} of {len(recs_list)}</div>",
+                        unsafe_allow_html=True,
+                    )
+                with c_next:
+                    if st.button("›", key=f"next_{category_key}"):
+                        st.session_state[idx_key] = 0 if idx == last else idx + 1
+                        _clear_deployment_after_card_nav()
+                        st.session_state["_pending_tab"] = _RECOMMENDATION_TAB_INDEX
+                        st.rerun()
         else:
             st.markdown(title_html, unsafe_allow_html=True)
 
@@ -323,40 +394,43 @@ def _render_category_card(
         selected_category = st.session_state.get("deployment_selected_category")
         is_selected = selected_category == category_key
 
-        if is_selected:
-            if st.button(
-                "✅ Selected",
-                key=f"selected_{category_key}",
-                use_container_width=True,
-                type="secondary",
-            ):
-                st.session_state.deployment_selected_config = None
-                st.session_state.deployment_selected_category = None
-                st.session_state.deployment_yaml_generated = False
-                st.session_state.deployment_yaml_files = {}
-                st.session_state.deployment_id = None
-                st.session_state.deployment_error = None
-                st.session_state.deployed_to_cluster = False
-                _pop_viable_configs_table_state()
-                st.rerun()
-        else:
-            if st.button("Select", key=f"select_{category_key}", use_container_width=True):
-                st.session_state.deployment_selected_config = rec
-                st.session_state.deployment_selected_category = category_key
-                st.session_state.deployment_yaml_generated = False
-                st.session_state.deployment_yaml_files = {}
-                st.session_state.deployment_id = None
-                st.session_state.deployed_to_cluster = False
-                _pop_viable_configs_table_state()
-
-                result = deploy_and_generate_yaml(rec)
-                if result and result.get("success"):
-                    st.session_state.deployment_id = result["deployment_id"]
-                    st.session_state.deployment_yaml_files = result["files"]
-                    st.session_state.deployment_yaml_generated = True
-                else:
+        with st.container(key=f"nn_card_select_btn_{category_key}"):
+            if is_selected:
+                with st.container(key=f"nn_card_selected_{category_key}"):
+                    if st.button(
+                        "Selected",
+                        key=f"selected_{category_key}",
+                        help="Active deployment for this card.",
+                        use_container_width=True,
+                        type="secondary",
+                    ):
+                        st.session_state.deployment_selected_config = None
+                        st.session_state.deployment_selected_category = None
+                        st.session_state.deployment_yaml_generated = False
+                        st.session_state.deployment_yaml_files = {}
+                        st.session_state.deployment_id = None
+                        st.session_state.deployment_error = None
+                        st.session_state.deployed_to_cluster = False
+                        _pop_viable_configs_table_state()
+                        st.rerun()
+            else:
+                if st.button("Select", key=f"select_{category_key}", use_container_width=True):
+                    st.session_state.deployment_selected_config = rec
+                    st.session_state.deployment_selected_category = category_key
                     st.session_state.deployment_yaml_generated = False
-                st.rerun()
+                    st.session_state.deployment_yaml_files = {}
+                    st.session_state.deployment_id = None
+                    st.session_state.deployed_to_cluster = False
+                    _pop_viable_configs_table_state()
+
+                    result = deploy_and_generate_yaml(rec)
+                    if result and result.get("success"):
+                        st.session_state.deployment_id = result["deployment_id"]
+                        st.session_state.deployment_yaml_files = result["files"]
+                        st.session_state.deployment_yaml_generated = True
+                    else:
+                        st.session_state.deployment_yaml_generated = False
+                    st.rerun()
 
 
 def render_top5_table(recommendations: list, priority: str):
@@ -365,6 +439,52 @@ def render_top5_table(recommendations: list, priority: str):
     Uses the backend's pre-ranked lists (ACCURACY-FIRST strategy in analyzer.py).
     """
     _render_model_recommendation_header()
+
+    # Selected card button: mint background; ::before = white check on green circle.
+    st.markdown(
+        f"""
+        <style>
+        div[class*="st-key-nn_card_select_btn_"] {{
+            margin-top: 1rem !important;
+        }}
+        div[class*="st-key-nn_card_selected_"] button {{
+            background-color: {_CHECK_SELECTED_BUTTON_BG} !important;
+            border: none !important;
+            box-shadow: none !important;
+        }}
+        div[class*="st-key-nn_card_selected_"] button:hover,
+        div[class*="st-key-nn_card_selected_"] button:focus-visible {{
+            background-color: {_CHECK_SELECTED_BUTTON_BG} !important;
+            border: none !important;
+            box-shadow: none !important;
+        }}
+        div[class*="st-key-nn_card_selected_"] button p {{
+            color: #31333F !important;
+            display: flex !important;
+            align-items: center !important;
+            flex-direction: row !important;
+        }}
+        div[class*="st-key-nn_card_selected_"] button p::before {{
+            content: "\\2713";
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 1.15em;
+            height: 1.15em;
+            border-radius: 50%;
+            background-color: {_CHECK_GREEN} !important;
+            color: #ffffff !important;
+            font-weight: 700;
+            font-size: 0.75em;
+            margin-right: 0.4em;
+            line-height: 1;
+            transform: translateY(-0.08em);
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     use_case = st.session_state.get("detected_use_case", "chatbot_conversational")
 
@@ -417,7 +537,7 @@ def render_options_list_inline():
     st.markdown(
         f"""<div style="margin: 1rem 0 1rem 0; padding: 0; text-align: left;">
 <h3 style="font-weight: 600; font-size: 1.375rem; margin: 0; padding: 0; line-height: 1.2; color: var(--text-color, #31333F);">All viable deployment configurations</h3>
-<p style="margin: 0.35rem 0 0 0; padding: 0; font-size: 0.9rem; line-height: 1.7; color: rgba(49, 51, 63, 0.62); text-align: left;">Evaluated <span style="font-weight: 600;">{total_configs}</span> viable configurations, showing <span style="font-weight: 600;">{configs_after_filters}</span> unique options</p>
+<p style="margin: 0.35rem 0 0 0; padding: 0; font-size: 0.85rem; line-height: 1.7; color: #000; text-align: left;">Evaluated <span style="font-weight: 600;">{total_configs}</span> viable configurations, showing <span style="font-weight: 600;">{configs_after_filters}</span> unique options</p>
 </div>""",
         unsafe_allow_html=True,
     )
@@ -435,15 +555,12 @@ def render_options_list_inline():
             _pop_viable_configs_table_state()
 
         df = _viable_configs_display_dataframe(table_data)
-        st.caption(
-            "✓ marks the active deployment. Select a configuration using the recommendation cards above."
-        )
         # No on_select / selection_mode — those add Streamlit's row checkbox column, which cannot
-        # stay in sync with card selection; the ✓ column reflects the current deployment instead.
+        # stay in sync with card selection; the check column reflects the current deployment instead.
         st.dataframe(
             df,
             column_config={
-                "✓": st.column_config.TextColumn("✓", width=None),
+                _CHECK_MARK: st.column_config.TextColumn(" ", width="small"),
                 "TTFT (ms)": st.column_config.NumberColumn("TTFT (ms)", format="%.0f"),
                 "Cost/mo": st.column_config.NumberColumn("Cost/mo", format="%.0f"),
                 "Acc": st.column_config.NumberColumn("Acc", format="%.0f"),

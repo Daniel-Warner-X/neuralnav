@@ -79,17 +79,22 @@ st.markdown(
         padding: 0 1.25rem;
     }
     .nn-hero {
+        --nn-hero-title-size: 1.35rem;
+        --nn-hero-title-lh: 1.15;
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: flex-start;
         gap: 0.5rem;
         margin: 0 0 1.25rem 0;
         padding: 0;
         line-height: 1.2;
     }
+    /* Logomark height matches the "NeuralNav" line box only, not title + tagline stack */
     .nn-hero-logo {
-        width: 32px;
-        height: auto;
+        height: calc(var(--nn-hero-title-size) * var(--nn-hero-title-lh));
+        width: auto;
+        max-width: 2.25rem;
+        object-fit: contain;
         flex-shrink: 0;
         display: block;
     }
@@ -100,11 +105,11 @@ st.markdown(
         text-align: left;
     }
     .nn-hero-title {
-        font-size: 1.35rem;
+        font-size: var(--nn-hero-title-size);
         font-weight: 700;
         margin: 0;
         padding: 0;
-        line-height: 1.15;
+        line-height: var(--nn-hero-title-lh);
         letter-spacing: -0.02em;
         color: var(--text-color, #31333F);
     }
@@ -117,11 +122,54 @@ st.markdown(
     }
     /* Space between hero and tab bar */
     .block-container [data-testid="stTabs"] { margin-top: 0.75rem !important; }
-    /* Card header row with 5 cols: title + spacer + ‹ + counter + › (not the full-width Select row) */
-    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"]:has(> *:nth-child(5)) {
+    /* Recommendation card ‹ › row only (key nn_rec_card_nav_* in recommendations.py). Do not use
+       :has(> *:nth-child(5)) — that also matched Define Use Case’s 5 scenario buttons. */
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] {
+        align-items: center !important;
+        /* One mechanism for ‹ / count / › spacing: equal gap between every column (symmetric). */
+        gap: 0.5rem !important;
+    }
+    /* Pin ‹ / › to the inner edges of their columns (do not set flex on stColumn width). */
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(3) {
+        display: flex !important;
+        justify-content: flex-end !important;
         align-items: center !important;
     }
-    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"]:has(> *:nth-child(5)) button {
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(3) [data-testid="stVerticalBlock"] {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-end !important;
+        width: 100% !important;
+    }
+    /* Count column: shrink to label width so gap is symmetric to ‹ and › (wide column left empty space after "5"). */
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(4) {
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        flex: 0 1 auto !important;
+        width: max-content !important;
+        max-width: 100% !important;
+        min-width: min-content !important;
+    }
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(4) [data-testid="stVerticalBlock"] {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        width: fit-content !important;
+        max-width: 100% !important;
+    }
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(5) {
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+    }
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(5) [data-testid="stVerticalBlock"] {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        width: 100% !important;
+    }
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] button {
         appearance: none !important;
         -webkit-appearance: none !important;
         border: none !important;
@@ -129,13 +177,14 @@ st.markdown(
         box-shadow: none !important;
         color: inherit !important;
         font-family: inherit !important;
-        font-size: 0.85rem !important;
-        font-weight: 400 !important;
-        line-height: 1 !important;
+        /* Slightly larger + semibold so ‹ › match the #n of N line (guillemets are thin at 0.85rem/400). */
+        font-size: 1.05rem !important;
+        font-weight: 600 !important;
+        line-height: 1.2 !important;
         margin: 0 !important;
-        padding: 0 0.12rem !important;
-        min-height: 1.25em !important;
-        height: 1.25em !important;
+        padding: 0 0.18rem !important;
+        min-height: 1.5em !important;
+        height: auto !important;
         width: auto !important;
         box-sizing: border-box !important;
         display: inline-flex !important;
@@ -144,26 +193,46 @@ st.markdown(
         cursor: pointer !important;
         border-radius: 0 !important;
     }
-    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"]:has(> *:nth-child(5)) button:hover {
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] button:hover {
         opacity: 0.72 !important;
     }
-    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"]:has(> *:nth-child(5)) button:focus-visible {
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] button:focus-visible {
         outline: 2px solid rgba(49, 51, 63, 0.35) !important;
         outline-offset: 2px !important;
     }
-    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"]:has(> *:nth-child(5)) button p,
-    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"]:has(> *:nth-child(5)) button span {
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] button p,
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] button span {
         margin: 0 !important;
         padding: 0 !important;
         line-height: 1 !important;
     }
-    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"]:has(> *:nth-child(5)) button [data-testid="stMarkdownContainer"] {
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stHorizontalBlock"] button [data-testid="stMarkdownContainer"] {
         margin: 0 !important;
         padding: 0 !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         height: 100% !important;
+    }
+    /* Spacing is from row gap — keep counter padding 0 to avoid doubling with gap. */
+    div[class*="st-key-nn_rec_card_nav_"] .nn-rec-card-counter {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        box-sizing: border-box !important;
+    }
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stMarkdownContainer"]:has(.nn-rec-card-counter) {
+        margin: 0 !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        width: fit-content !important;
+        max-width: 100% !important;
+        min-height: 1.25em !important;
+    }
+    div[class*="st-key-nn_rec_card_nav_"] [data-testid="stMarkdownContainer"]:has(.nn-rec-card-counter) p {
+        margin: 0 !important;
+        line-height: 1 !important;
     }
 </style>
 """,
@@ -507,7 +576,7 @@ def render_technical_specs_tab():
 
 
 def render_results_tab(priority: str, models_df: pd.DataFrame):
-    """Tab 3: Results display - Model Recommendation."""
+    """Tab 3: Results display - Configuration Recommendation."""
     used_priority = st.session_state.get("used_priority", priority)
 
     if not st.session_state.slo_approved:
