@@ -170,10 +170,10 @@ jobs:
                     mountPath: /tmp/ollama
                   resources:
                     requests:
-                      memory: "1Gi"
+                      memory: "4Gi"
                       cpu: "500m"
                     limits:
-                      memory: "2Gi"
+                      memory: "6Gi"
                       cpu: "1000m"
                   livenessProbe:
                     tcpSocket:
