@@ -221,7 +221,7 @@ make start-ui
 **Manual start:**
 ```bash
 source venv/bin/activate
-streamlit run ui/app.py
+streamlit run ui/main.py
 ```
 
 **Access:**
@@ -583,7 +583,7 @@ curl http://localhost:8080/health
 
 ### Modifying the UI
 
-UI code is in `ui/app.py`. Changes auto-reload in the browser.
+The UI entrypoint is `ui/main.py` (navigation); main page content is in `ui/app.py`. Changes auto-reload in the browser.
 
 **Key sections:**
 - `render_chat_interface()` - Chat input/history
