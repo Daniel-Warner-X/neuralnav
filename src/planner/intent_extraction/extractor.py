@@ -1,13 +1,10 @@
 """Intent extraction from conversational input."""
 
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Union
 
 from planner.llm.ollama_client import OllamaClient
-from planner.llm.openai_client import OpenAICompatibleClient
 from planner.llm.prompts import INTENT_EXTRACTION_SCHEMA, build_intent_extraction_prompt
 from planner.shared.schemas import ConversationMessage, DeploymentIntent
 
@@ -17,33 +14,18 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).parent.parent.parent.parent / "logs" / "prompts"
 PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Type alias for LLM clients
-LLMClient = Union[OllamaClient, OpenAICompatibleClient]
-
 
 class IntentExtractor:
     """Extract structured deployment intent from natural language conversation."""
 
-    def __init__(self, llm_client: LLMClient | None = None):
+    def __init__(self, llm_client: OllamaClient | None = None):
         """
         Initialize intent extractor.
 
         Args:
-            llm_client: Optional LLM client (Ollama or OpenAI-compatible).
-                       If not provided, creates client based on environment:
-                       - OPENAI_BASE_URL set → OpenAICompatibleClient
-                       - Otherwise → OllamaClient
+            llm_client: Optional Ollama client (creates default if not provided)
         """
-        if llm_client is None:
-            # Auto-detect based on environment
-            if os.getenv("OPENAI_BASE_URL"):
-                logger.info("Using OpenAI-compatible client (OPENAI_BASE_URL set)")
-                self.llm_client: LLMClient = OpenAICompatibleClient()
-            else:
-                logger.info("Using Ollama client (default)")
-                self.llm_client = OllamaClient()
-        else:
-            self.llm_client = llm_client
+        self.llm_client = llm_client or OllamaClient()
 
     def extract_intent(
         self, user_message: str, conversation_history: list[ConversationMessage] | None = None
