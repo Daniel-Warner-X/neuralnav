@@ -87,12 +87,13 @@ oc delete namespace $NS
 - ✅ Your UI changes (Streamlit app)
 - ✅ Backend API (with demo data)
 - ✅ Recommendation engine (using JSON benchmarks)
+- ✅ LLM-powered intent extraction (via existing vLLM endpoint)
 - ❌ No PostgreSQL (uses JSON files)
-- ❌ No Ollama (no "Analyze Use Case" feature)
+- ❌ No local Ollama (uses shared vLLM service)
 
 **Resources**: ~768MB RAM, 0.35 CPU (very light!)
 
-**Note**: Demo deployments don't include LLM-based intent extraction. Use the sample use cases in the UI dropdown or direct specification entry to test recommendations.
+**Note**: Demo deployments use a shared vLLM endpoint (`vllm-llama-model-predictor.lightspeed-poc.svc.cluster.local`) for the "Analyze Use Case" feature.
 
 ## Auto-Deploy Triggers
 
