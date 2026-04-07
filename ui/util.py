@@ -7,8 +7,6 @@ from dataclasses import dataclass
 import streamlit as st
 from transformers import AutoConfig
 
-from planner.capacity_planner import *
-
 # Session state variables pertaining to user selected values
 USER_SCENARIO_KEY = "scenario"
 SELECTED_MODEL_KEY = "selected_model"
@@ -99,7 +97,7 @@ def init_session_state():
 
     if USER_SCENARIO_KEY not in st.session_state:
         st.session_state[USER_SCENARIO_KEY] = Scenario()
-    if SELECTED_MODEL_KEY not in st.session_state:
+    if not st.session_state.get(SELECTED_MODEL_KEY):
         st.session_state[SELECTED_MODEL_KEY] = st.session_state[USER_SCENARIO_KEY].get_model_name()
     if SELECTED_GPU_NAME_KEY not in st.session_state:
         st.session_state[SELECTED_GPU_NAME_KEY] = st.session_state[USER_SCENARIO_KEY].gpu_name
