@@ -10,44 +10,10 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from llm_optimizer.predefined.gpus import GPU_SPECS
+from api_client import fetch_gpu_recommender_estimate, fetch_gpu_types
 from plotly.subplots import make_subplots
 
-from planner.gpu_recommender import CostManager, GPURecommender
-
-cost_manager_temp = CostManager()
-
-
-# Helper function to convert result objects to JSON-serializable format
-def result_to_dict(result) -> dict:
-    """Convert a PerformanceEstimationResult to a JSON-serializable dictionary.
-
-    Recursively converts all nested objects, lists, and dictionaries to ensure
-    complete serialization of the PerformanceEstimationResult.
-    """
-
-    def convert_value(val):
-        """Recursively convert a value to JSON-serializable format."""
-        if val is None:
-            return None
-        elif isinstance(val, int | float | str | bool):
-            return val
-        elif isinstance(val, list | tuple):
-            return [convert_value(item) for item in val]
-        elif isinstance(val, dict):
-            return {k: convert_value(v) for k, v in val.items()}
-        elif hasattr(val, "__dict__"):
-            # Convert object to dictionary recursively
-            obj_dict = {}
-            for k, v in val.__dict__.items():
-                if not k.startswith("_"):  # Skip private attributes
-                    obj_dict[k] = convert_value(v)
-            return obj_dict
-        else:
-            # For other types, convert to string
-            return str(val)
-
-    return convert_value(result)  # type: ignore[no-any-return]
+_gpu_types_data = fetch_gpu_types()
 
 
 # Initialize session state
@@ -57,8 +23,8 @@ if "failed_gpus" not in st.session_state:
     st.session_state.failed_gpus = None
 if "recommender_params" not in st.session_state:
     st.session_state.recommender_params = None
-if "recommender_instance" not in st.session_state:
-    st.session_state.recommender_instance = None
+if "estimated_best_performance" not in st.session_state:
+    st.session_state.estimated_best_performance = {}
 
 # Title and description
 st.title("GPU Recommendation Engine")
@@ -142,7 +108,7 @@ if enable_latency:
 
 # GPU Selection
 st.sidebar.subheader("GPU Selection (Optional)")
-available_gpus = sorted(GPU_SPECS.keys())
+available_gpus = sorted(_gpu_types_data.keys()) if _gpu_types_data else []
 selected_gpus = st.sidebar.multiselect(
     "Select GPUs to analyze",
     options=available_gpus,
@@ -197,8 +163,7 @@ with st.sidebar.expander("⚙️ Set Custom Costs", expanded=False):
 
     for gpu_name in gpus_for_cost:
         # Get default cost as initial value
-        default_cost = cost_manager_temp.get_cost(gpu_name, num_gpus=1)
-        default_value = default_cost if default_cost is not None else 0.0
+        default_value = _gpu_types_data.get(gpu_name, {}).get("cost_per_hour_usd", 0.0) or 0.0
 
         cost = st.number_input(
             f"{gpu_name}",
@@ -223,28 +188,22 @@ run_analysis = st.sidebar.button("🚀 Run Analysis", type="primary", use_contai
 # Main content area
 if run_analysis:
     with st.spinner("Running GPU recommendation analysis... This may take a few moments."):
-        try:
-            # Create recommender instance
-            recommender = GPURecommender(
-                model_id=model_id,
-                input_len=input_len,
-                output_len=output_len,
-                max_gpus=max_gpus,
-                max_gpus_per_type=max_gpus_per_type if max_gpus_per_type else None,
-                gpu_list=selected_gpus if selected_gpus else None,
-                max_ttft=max_ttft,
-                max_itl=max_itl,
-                max_latency=max_latency,
-                custom_gpu_costs=custom_gpu_costs if custom_gpu_costs else None,
-            )
-
-            # Run recommendation
-            gpu_results, failed_gpus = recommender.get_gpu_results()
-
-            # Store in session state
-            st.session_state.recommendation_results = gpu_results
-            st.session_state.failed_gpus = failed_gpus
-            st.session_state.recommender_instance = recommender
+        result = fetch_gpu_recommender_estimate(
+            model_id=model_id,
+            input_len=input_len,
+            output_len=output_len,
+            max_gpus=max_gpus,
+            max_gpus_per_type=max_gpus_per_type if max_gpus_per_type else None,
+            gpu_list=selected_gpus if selected_gpus else None,
+            max_ttft=max_ttft,
+            max_itl=max_itl,
+            max_latency=max_latency,
+            custom_gpu_costs=custom_gpu_costs if custom_gpu_costs else None,
+        )
+        if result:
+            st.session_state.recommendation_results = result["gpu_results"]
+            st.session_state.failed_gpus = result["failed_gpus"]
+            st.session_state.estimated_best_performance = result["estimated_best_performance"]
             st.session_state.recommender_params = {
                 "model_id": model_id,
                 "input_len": input_len,
@@ -255,45 +214,10 @@ if run_analysis:
                 "max_itl": max_itl,
                 "custom_gpu_costs": custom_gpu_costs if custom_gpu_costs else None,
                 "max_latency": max_latency,
+                "using_custom_costs": bool(custom_gpu_costs),
             }
-
             st.success("✅ Analysis complete!")
-
-        except Exception as e:
-            # Clear any previous results from session state
-            st.session_state.recommendation_results = None
-            st.session_state.failed_gpus = None
-            st.session_state.recommender_instance = None
-            st.session_state.recommender_params = None
-
-            error_str = str(e).lower()
-
-            # Check for gated model errors
-            if (
-                "gated" in error_str
-                or "401" in error_str
-                or "403" in error_str
-                or "unauthorized" in error_str
-            ):
-                st.error("🔒 **This model is gated and requires authentication**")
-                st.info("""
-                **To access gated models:**
-
-                1. **Request access** to the model on [HuggingFace](https://huggingface.co/)
-                2. **Generate a token** from your [HuggingFace settings page](https://huggingface.co/settings/tokens)
-                3. **Set the environment variable** before running the application:
-                   ```bash
-                   export HF_TOKEN=your_token_here
-                   ```
-                4. **Restart** the Streamlit application
-
-                **Popular gated models:** Llama 3, Gemma, Mistral, etc.
-                """)
-                with st.expander("🔍 View detailed error"):
-                    st.exception(e)
-            else:
-                st.error(f"❌ Error running analysis: {str(e)}")
-                st.exception(e)
+        # on error, fetch_gpu_recommender_estimate already called st.error
 
 # Display results if available
 if st.session_state.recommendation_results is not None:
@@ -313,6 +237,9 @@ if st.session_state.recommendation_results is not None:
     if constraints:
         st.info("🎯 **Constraints:** " + " & ".join(constraints))
 
+    # Get estimated best performance from session state
+    estimated_best = st.session_state.get("estimated_best_performance", {})
+
     # Initialize tracking lists
     gpu_comparison_data = []
     gpus_cannot_fit = []
@@ -325,79 +252,36 @@ if st.session_state.recommendation_results is not None:
         # Prepare data for visualization
         for gpu_name, result in gpu_results.items():
             try:
-                # Extract relevant metrics from the result
-                gpu_info = {
-                    "GPU": gpu_name,
-                }
+                gpu_info = {"GPU": gpu_name}
+                best_latency = result.get("best_latency") if isinstance(result, dict) else None
+                if best_latency is None:
+                    gpus_cannot_fit.append(gpu_name)
+                    continue
 
-                # Try to extract best config info
-                if hasattr(result, "best_configs") and result.best_configs:
-                    best_config = (
-                        result.best_configs[0]
-                        if isinstance(result.best_configs, list)
-                        else result.best_configs
-                    )
+                has_data = False
+                if best_latency.get("throughput_tps") is not None:
+                    gpu_info["Throughput (tokens/s)"] = best_latency["throughput_tps"]
+                    has_data = True
+                if best_latency.get("ttft_ms") is not None:
+                    gpu_info["TTFT (ms)"] = best_latency["ttft_ms"]
+                    has_data = True
+                if best_latency.get("itl_ms") is not None:
+                    gpu_info["ITL (ms)"] = best_latency["itl_ms"]
+                    has_data = True
+                if best_latency.get("e2e_latency_s") is not None:
+                    gpu_info["E2E Latency (s)"] = best_latency["e2e_latency_s"]
+                    has_data = True
 
-                    best_latency_performnace_result = (
-                        result.best_configs.get("best_latency")
-                        if isinstance(result.best_configs, dict)
-                        else None
-                    )
+                if not has_data:
+                    gpus_no_data.append(gpu_name)
+                    continue
 
-                    # Check if best_latency result is None or empty
-                    if best_latency_performnace_result is None:
-                        gpus_cannot_fit.append(gpu_name)
-                        continue
-
-                    # Check if we have actual performance data
-                    has_data = False
-                    if (
-                        hasattr(best_latency_performnace_result, "output_throughput_tps")
-                        and best_latency_performnace_result.output_throughput_tps is not None
-                    ):
-                        gpu_info["Throughput (tokens/s)"] = (
-                            best_latency_performnace_result.output_throughput_tps
-                        )
-                        has_data = True
-                    if (
-                        hasattr(best_latency_performnace_result, "ttft_ms")
-                        and best_latency_performnace_result.ttft_ms is not None
-                    ):
-                        gpu_info["TTFT (ms)"] = best_latency_performnace_result.ttft_ms
-                        has_data = True
-                    if (
-                        hasattr(best_latency_performnace_result, "itl_ms")
-                        and best_latency_performnace_result.itl_ms is not None
-                    ):
-                        gpu_info["ITL (ms)"] = best_latency_performnace_result.itl_ms
-                        has_data = True
-                    if (
-                        hasattr(best_latency_performnace_result, "e2e_latency_s")
-                        and best_latency_performnace_result.e2e_latency_s is not None
-                    ):
-                        gpu_info["E2E Latency (s)"] = best_latency_performnace_result.e2e_latency_s
-                        has_data = True
-
-                    if not has_data:
-                        gpus_no_data.append(gpu_name)
-                        continue
-
-                # Extract optimal concurrency if available
-                if (
-                    hasattr(result, "optimal_concurrency")
-                    and result.optimal_concurrency is not None
-                ):
-                    gpu_info["Optimal Concurrency"] = result.optimal_concurrency
-
-                # Add cost information
-                num_gpus = recommender.max_gpus_per_type.get(gpu_name, recommender.max_gpus)
-                cost = recommender.cost_manager.get_cost(gpu_name, num_gpus)
+                cost = result.get("cost")
                 if cost is not None:
                     gpu_info["Cost"] = cost
 
                 gpu_comparison_data.append(gpu_info)
             except Exception:
-                # If we get an error, likely the GPU cannot fit the model
                 gpus_cannot_fit.append(gpu_name)
 
         # Create comparison dataframe
@@ -543,38 +427,38 @@ if st.session_state.recommendation_results is not None:
             # Create metric cards for best GPUs
             col1, col2, col3, col4, col5 = st.columns(5)
 
-            # Get recommender instance from session state
-            recommender = st.session_state.recommender_instance
-
             with col1:
-                best_throughput = recommender.get_gpu_with_highest_throughput()
-                if best_throughput:
-                    best_gpu, best_val = best_throughput
-                    st.metric("🚀 Highest Throughput", f"{best_gpu}", f"{best_val:.2f} tokens/s")
+                best_t = estimated_best.get("highest_throughput")
+                if best_t:
+                    st.metric(
+                        "🚀 Highest Throughput",
+                        best_t["gpu"],
+                        f"{best_t['throughput_tps']:.2f} tokens/s",
+                    )
 
             with col2:
-                best_ttft = recommender.get_gpu_with_lowest_ttft()
+                best_ttft = estimated_best.get("lowest_ttft")
                 if best_ttft:
-                    best_gpu, best_val = best_ttft
-                    st.metric("⚡ Lowest TTFT", f"{best_gpu}", f"{best_val:.2f} ms")
+                    st.metric("⚡ Lowest TTFT", best_ttft["gpu"], f"{best_ttft['ttft_ms']:.2f} ms")
 
             with col3:
-                best_itl = recommender.get_gpu_with_lowest_itl()
+                best_itl = estimated_best.get("lowest_itl")
                 if best_itl:
-                    best_gpu, best_val = best_itl
-                    st.metric("⏱️ Lowest ITL", f"{best_gpu}", f"{best_val:.2f} ms")
+                    st.metric("⏱️ Lowest ITL", best_itl["gpu"], f"{best_itl['itl_ms']:.2f} ms")
 
             with col4:
-                best_e2e = recommender.get_gpu_with_lowest_e2e_latency()
+                best_e2e = estimated_best.get("lowest_e2e_latency")
                 if best_e2e:
-                    best_gpu, best_val = best_e2e
-                    st.metric("🎯 Lowest E2E Latency", f"{best_gpu}", f"{best_val:.2f} s")
+                    st.metric(
+                        "🎯 Lowest E2E Latency",
+                        best_e2e["gpu"],
+                        f"{best_e2e['e2e_latency_s']:.2f} s",
+                    )
 
             with col5:
-                best_cost = recommender.get_gpu_with_lowest_cost()
-                if best_cost:
-                    best_gpu, best_val = best_cost
-                    st.metric("💰 Lowest Cost", f"{best_gpu}", f"${best_val:.2f}")
+                best_c = estimated_best.get("lowest_cost")
+                if best_c:
+                    st.metric("💰 Lowest Cost", best_c["gpu"], f"${best_c['cost']:.2f}")
 
             # Show summary of excluded GPUs if any
             excluded_count = len(gpus_cannot_fit) + len(gpus_no_data) + len(failed_gpus)
@@ -614,8 +498,7 @@ if st.session_state.recommendation_results is not None:
                         st.markdown("**⚠️ Failed Analysis or Constraints Not Met:**")
                         st.caption("Errors during performance estimation or constraints violation")
                         for gpu, reason in failed_gpus.items():
-                            with st.expander(f"**{gpu}**", expanded=False):
-                                st.write(reason)
+                            st.markdown(f"**{gpu}:** {reason}")
 
             st.divider()
 
@@ -756,7 +639,7 @@ if st.session_state.recommendation_results is not None:
                 st.markdown("### 💰 Cost Analysis")
 
                 # Show conditional disclaimer based on whether custom costs are used
-                if recommender.cost_manager.is_using_custom_costs():
+                if params.get("using_custom_costs", False):
                     st.caption("💡 Displaying custom costs")
                 else:
                     st.caption("💡 Default costs are reference values for comparison purposes.")
@@ -826,35 +709,7 @@ if st.session_state.recommendation_results is not None:
                 st.markdown("### 🔧 Model Details")
                 st.caption("Model card details")
 
-                # Get model config from any result (they're all the same)
-                sample_result = next(iter(gpu_results.values()))
-                if hasattr(sample_result, "model_config") and sample_result.model_config:
-                    model_config = sample_result.model_config
-
-                    col1, col2 = st.columns(2)
-
-                    with col1:
-                        st.markdown("**Architecture:**")
-                        if hasattr(model_config, "num_params"):
-                            params_b = model_config.num_params / 1e9
-                            st.write(f"• Parameters: `{params_b:.2f}B`")
-                        if hasattr(model_config, "num_layers"):
-                            st.write(f"• Layers: `{model_config.num_layers}`")
-                        if hasattr(model_config, "hidden_dim"):
-                            st.write(f"• Hidden Dimension: `{model_config.hidden_dim}`")
-                        if hasattr(model_config, "vocab_size"):
-                            st.write(f"• Vocabulary Size: `{model_config.vocab_size:,}`")
-
-                    with col2:
-                        st.markdown("**Attention Configuration:**")
-                        if hasattr(model_config, "num_heads"):
-                            st.write(f"• Attention Heads: `{model_config.num_heads}`")
-                        if hasattr(model_config, "num_kv_heads"):
-                            st.write(f"• KV Heads: `{model_config.num_kv_heads}`")
-                        if hasattr(model_config, "inferred_precision"):
-                            st.write(f"• Precision: `{model_config.inferred_precision}`")
-                else:
-                    st.info("Model configuration not available")
+                st.info("Model configuration not available in GPU estimation results.")
 
             with tab4:
                 st.markdown("### 🔍 Detailed GPU Analysis")
@@ -867,8 +722,8 @@ if st.session_state.recommendation_results is not None:
                         st.markdown("#### 💰 Cost")
                         cost_col1, cost_col2 = st.columns(2)
 
-                        num_gpus = recommender.max_gpus_per_type.get(gpu_name, recommender.max_gpus)
-                        cost = recommender.cost_manager.get_cost(gpu_name, num_gpus)
+                        num_gpus = result.get("num_gpus", 1) if isinstance(result, dict) else 1
+                        cost = result.get("cost") if isinstance(result, dict) else None
 
                         with cost_col1:
                             if cost is not None:
@@ -886,20 +741,19 @@ if st.session_state.recommendation_results is not None:
                         st.markdown("---")
 
                         # GPU Specifications
-                        if gpu_name in GPU_SPECS:
-                            gpu_spec = GPU_SPECS[gpu_name]
+                        gpu_spec = _gpu_types_data.get(gpu_name)
+                        if gpu_spec:
                             st.markdown("#### 💻 GPU Specifications")
                             col1, col2 = st.columns(2)
-
                             with col1:
-                                st.write(
-                                    f"• Compute: `{gpu_spec['FP16_TFLOPS']:.0f} TFLOPS (FP16)`"
-                                )
-                                st.write(f"• Memory: `{gpu_spec['VRAM_GB']} GB`")
+                                st.write(f"• Memory: `{gpu_spec.get('memory_gb', 'N/A')} GB`")
+                                if gpu_spec.get("compute_capability"):
+                                    st.write(
+                                        f"• Compute Capability: `{gpu_spec['compute_capability']}`"
+                                    )
                             with col2:
-                                st.write(f"• Bandwidth: `{gpu_spec['Memory_Bandwidth_GBs']} GB/s`")
-                                st.write(f"• Architecture: `{gpu_spec.get('Architecture', 'N/A')}`")
-
+                                if gpu_spec.get("notes"):
+                                    st.write(f"• Notes: `{gpu_spec['notes']}`")
                             st.markdown("---")
 
                         # Concurrency Information
@@ -907,30 +761,27 @@ if st.session_state.recommendation_results is not None:
                         conc_col1, conc_col2 = st.columns(2)
 
                         with conc_col1:
-                            if (
-                                hasattr(result, "optimal_concurrency")
-                                and result.optimal_concurrency
-                            ):
-                                st.write(
-                                    f"• **Optimal Concurrency:** `{result.optimal_concurrency}`"
-                                )
+                            opt_conc = (
+                                result.get("best_latency", {}).get("optimal_concurrency")
+                                if isinstance(result, dict)
+                                else None
+                            )
+                            if opt_conc is not None:
+                                st.write(f"• **Optimal Concurrency:** `{opt_conc}`")
 
                         with conc_col2:
-                            if hasattr(result, "concurrency_limits") and result.concurrency_limits:
-                                limits = result.concurrency_limits
-                                if isinstance(limits, dict):
-                                    st.markdown("**Limits:**")
-                                    for limit_name, limit_val in limits.items():
-                                        formatted_name = limit_name.replace("_", " ").title()
-                                        st.write(f"• {formatted_name}: `{limit_val}`")
+                            pass  # concurrency limits not available in API response
 
                         st.markdown("---")
 
                         # Best Configurations with Charts
-                        if hasattr(result, "best_configs") and result.best_configs:
+                        if isinstance(result, dict) and result.get("best_latency"):
                             st.markdown("#### 🏆 Best Configurations")
 
-                            configs = result.best_configs
+                            configs = {
+                                "best_latency": result.get("best_latency"),
+                                "best_output_throughput": result.get("best_output_throughput"),
+                            }
                             if isinstance(configs, dict):
                                 # Prepare data for visualization
                                 config_data = []
@@ -942,39 +793,35 @@ if st.session_state.recommendation_results is not None:
                                         "Configuration": config_type.replace("_", " ").title()
                                     }
 
-                                    if hasattr(perf_result, "ttft_ms") and perf_result.ttft_ms:
-                                        config_row["TTFT (ms)"] = perf_result.ttft_ms
-                                    if hasattr(perf_result, "itl_ms") and perf_result.itl_ms:
-                                        config_row["ITL (ms)"] = perf_result.itl_ms
-                                    if (
-                                        hasattr(perf_result, "e2e_latency_s")
-                                        and perf_result.e2e_latency_s
-                                    ):
-                                        config_row["E2E Latency (s)"] = perf_result.e2e_latency_s
-                                    if (
-                                        hasattr(perf_result, "output_throughput_tps")
-                                        and perf_result.output_throughput_tps
-                                    ):
-                                        config_row["Output Throughput (tok/s)"] = (
-                                            perf_result.output_throughput_tps
-                                        )
-                                    if (
-                                        hasattr(perf_result, "input_throughput_tps")
-                                        and perf_result.input_throughput_tps
-                                    ):
-                                        config_row["Input Throughput (tok/s)"] = (
-                                            perf_result.input_throughput_tps
-                                        )
-                                    if (
-                                        hasattr(perf_result, "requests_per_sec")
-                                        and perf_result.requests_per_sec
-                                    ):
-                                        config_row["Requests/sec"] = perf_result.requests_per_sec
-                                    if (
-                                        hasattr(perf_result, "concurrency")
-                                        and perf_result.concurrency
-                                    ):
-                                        config_row["Concurrency"] = perf_result.concurrency
+                                    if isinstance(perf_result, dict):
+                                        if perf_result.get("ttft_ms") is not None:
+                                            config_row["TTFT (ms)"] = perf_result["ttft_ms"]
+                                        if perf_result.get("itl_ms") is not None:
+                                            config_row["ITL (ms)"] = perf_result["itl_ms"]
+                                        if perf_result.get("e2e_latency_s") is not None:
+                                            config_row["E2E Latency (s)"] = perf_result[
+                                                "e2e_latency_s"
+                                            ]
+                                        if perf_result.get("output_throughput_tps") is not None:
+                                            config_row["Output Throughput (tok/s)"] = perf_result[
+                                                "output_throughput_tps"
+                                            ]
+                                        if perf_result.get("input_throughput_tps") is not None:
+                                            config_row["Input Throughput (tok/s)"] = perf_result[
+                                                "input_throughput_tps"
+                                            ]
+                                        if perf_result.get("requests_per_sec") is not None:
+                                            config_row["Requests/sec"] = perf_result[
+                                                "requests_per_sec"
+                                            ]
+                                        if perf_result.get("throughput_tps") is not None:
+                                            config_row["Throughput (tok/s)"] = perf_result[
+                                                "throughput_tps"
+                                            ]
+                                        if perf_result.get("optimal_concurrency") is not None:
+                                            config_row["Concurrency"] = perf_result[
+                                                "optimal_concurrency"
+                                            ]
 
                                     config_data.append(config_row)
 
@@ -986,96 +833,100 @@ if st.session_state.recommendation_results is not None:
                                         df_configs, use_container_width=True, hide_index=True
                                     )
 
-                                    # Expandable resource details
+                                    # Resource details (inline — expanders cannot be nested)
                                     for config_type, perf_result in configs.items():
                                         if perf_result is None:
                                             continue
-                                        with st.expander(
-                                            f"📋 Resource Details - {config_type.replace('_', ' ').title()}"
-                                        ):
+                                        st.markdown(
+                                            f"**📋 Resource Details - {config_type.replace('_', ' ').title()}**"
+                                        )
+                                        with st.container():
                                             res_col1, res_col2 = st.columns(2)
 
                                             with res_col1:
                                                 st.markdown("**Memory & Compute:**")
-                                                if (
-                                                    hasattr(perf_result, "memory_needed_gb")
-                                                    and perf_result.memory_needed_gb
-                                                ):
-                                                    st.write(
-                                                        f"• Memory Needed: `{perf_result.memory_needed_gb:.2f} GB`"
-                                                    )
-                                                if (
-                                                    hasattr(perf_result, "usable_vram_gb")
-                                                    and perf_result.usable_vram_gb
-                                                ):
-                                                    st.write(
-                                                        f"• Usable VRAM: `{perf_result.usable_vram_gb:.2f} GB`"
-                                                    )
-                                                if (
-                                                    hasattr(perf_result, "bottleneck_is_memory")
-                                                    and perf_result.bottleneck_is_memory is not None
-                                                ):
-                                                    bottleneck = (
-                                                        "Memory"
-                                                        if perf_result.bottleneck_is_memory
-                                                        else "Compute"
-                                                    )
-                                                    st.write(f"• Bottleneck: `{bottleneck}`")
+                                                if isinstance(perf_result, dict):
+                                                    if (
+                                                        perf_result.get("memory_needed_gb")
+                                                        is not None
+                                                    ):
+                                                        st.write(
+                                                            f"• Memory Needed: `{perf_result['memory_needed_gb']:.2f} GB`"
+                                                        )
+                                                    if (
+                                                        perf_result.get("usable_vram_gb")
+                                                        is not None
+                                                    ):
+                                                        st.write(
+                                                            f"• Usable VRAM: `{perf_result['usable_vram_gb']:.2f} GB`"
+                                                        )
+                                                    if (
+                                                        perf_result.get("bottleneck_is_memory")
+                                                        is not None
+                                                    ):
+                                                        bottleneck = (
+                                                            "Memory"
+                                                            if perf_result["bottleneck_is_memory"]
+                                                            else "Compute"
+                                                        )
+                                                        st.write(f"• Bottleneck: `{bottleneck}`")
 
                                             with res_col2:
                                                 st.markdown("**Arithmetic Intensity:**")
-                                                if (
-                                                    hasattr(
-                                                        perf_result, "prefill_arithmetic_intensity"
-                                                    )
-                                                    and perf_result.prefill_arithmetic_intensity
-                                                ):
-                                                    st.write(
-                                                        f"• Prefill: `{perf_result.prefill_arithmetic_intensity:.2f}`"
-                                                    )
-                                                if (
-                                                    hasattr(
-                                                        perf_result, "decode_arithmetic_intensity"
-                                                    )
-                                                    and perf_result.decode_arithmetic_intensity
-                                                ):
-                                                    st.write(
-                                                        f"• Decode: `{perf_result.decode_arithmetic_intensity:.2f}`"
-                                                    )
-                                                if (
-                                                    hasattr(perf_result, "hardware_ops_per_byte")
-                                                    and perf_result.hardware_ops_per_byte
-                                                ):
-                                                    st.write(
-                                                        f"• HW Ops/Byte: `{perf_result.hardware_ops_per_byte:.2f}`"
-                                                    )
+                                                if isinstance(perf_result, dict):
+                                                    if (
+                                                        perf_result.get(
+                                                            "prefill_arithmetic_intensity"
+                                                        )
+                                                        is not None
+                                                    ):
+                                                        st.write(
+                                                            f"• Prefill: `{perf_result['prefill_arithmetic_intensity']:.2f}`"
+                                                        )
+                                                    if (
+                                                        perf_result.get(
+                                                            "decode_arithmetic_intensity"
+                                                        )
+                                                        is not None
+                                                    ):
+                                                        st.write(
+                                                            f"• Decode: `{perf_result['decode_arithmetic_intensity']:.2f}`"
+                                                        )
+                                                    if (
+                                                        perf_result.get("hardware_ops_per_byte")
+                                                        is not None
+                                                    ):
+                                                        st.write(
+                                                            f"• HW Ops/Byte: `{perf_result['hardware_ops_per_byte']:.2f}`"
+                                                        )
 
                                             st.markdown("**Memory Bound:**")
                                             bound_col1, bound_col2 = st.columns(2)
-                                            with bound_col1:
-                                                if (
-                                                    hasattr(perf_result, "prefill_is_memory_bound")
-                                                    and perf_result.prefill_is_memory_bound
-                                                    is not None
-                                                ):
-                                                    prefill_status = (
-                                                        "✅ Yes"
-                                                        if perf_result.prefill_is_memory_bound
-                                                        else "❌ No"
-                                                    )
-                                                    st.write(f"• Prefill: {prefill_status}")
-                                            with bound_col2:
-                                                if (
-                                                    hasattr(perf_result, "decode_is_memory_bound")
-                                                    and perf_result.decode_is_memory_bound
-                                                    is not None
-                                                ):
-                                                    decode_status = (
-                                                        "✅ Yes"
-                                                        if perf_result.decode_is_memory_bound
-                                                        else "❌ No"
-                                                    )
-                                                    st.write(f"• Decode: {decode_status}")
+                                            if isinstance(perf_result, dict):
+                                                with bound_col1:
+                                                    if (
+                                                        perf_result.get("prefill_is_memory_bound")
+                                                        is not None
+                                                    ):
+                                                        prefill_status = (
+                                                            "✅ Yes"
+                                                            if perf_result[
+                                                                "prefill_is_memory_bound"
+                                                            ]
+                                                            else "❌ No"
+                                                        )
+                                                        st.write(f"• Prefill: {prefill_status}")
+                                                with bound_col2:
+                                                    if (
+                                                        perf_result.get("decode_is_memory_bound")
+                                                        is not None
+                                                    ):
+                                                        decode_status = (
+                                                            "✅ Yes"
+                                                            if perf_result["decode_is_memory_bound"]
+                                                            else "❌ No"
+                                                        )
+                                                        st.write(f"• Decode: {decode_status}")
 
             with tab5:
                 st.markdown("### 🔧 LLM-Optimizer Tuning Commands")
@@ -1083,9 +934,9 @@ if st.session_state.recommendation_results is not None:
 
                 # Create expandable sections for each GPU
                 for gpu_name, result in gpu_results.items():
-                    if hasattr(result, "tuning_commands") and result.tuning_commands:
+                    if isinstance(result, dict) and result.get("tuning_commands"):
                         with st.expander(f"**{gpu_name}** - Tuning Commands"):
-                            tuning_cmds = result.tuning_commands
+                            tuning_cmds = result.get("tuning_commands")
 
                             if isinstance(tuning_cmds, dict):
                                 for complexity_level, frameworks in tuning_cmds.items():
@@ -1177,7 +1028,9 @@ if st.session_state.recommendation_results is not None:
 
             for gpu_name, result in gpu_results.items():
                 try:
-                    export_data["successful_gpus"][gpu_name] = result_to_dict(result)
+                    export_data["successful_gpus"][gpu_name] = (
+                        result if isinstance(result, dict) else str(result)
+                    )
                 except Exception as e:
                     export_data["successful_gpus"][gpu_name] = {"error": str(e)}
 
@@ -1328,11 +1181,11 @@ else:
     # Show available GPUs with specs
     st.subheader("📋 Available GPUs for Analysis")
     st.markdown(
-        f"The analysis will evaluate **{len(GPU_SPECS)}** GPU types. Click on any GPU to view its specifications:"
+        f"The analysis will evaluate **{len(_gpu_types_data)}** GPU types. Click on any GPU to view its specifications:"
     )
 
     # Create expandable sections for each GPU
-    gpu_list = sorted(GPU_SPECS.keys())
+    gpu_list = sorted(_gpu_types_data.keys()) if _gpu_types_data else []
 
     # Display GPUs in a grid with expanders
     num_cols = 2
@@ -1340,33 +1193,30 @@ else:
         cols = st.columns(num_cols)
         for col_idx, gpu_name in enumerate(gpu_list[i : i + num_cols]):
             with cols[col_idx], st.expander(f"**{gpu_name}**"):
-                gpu_spec = GPU_SPECS[gpu_name]
+                gpu_spec = _gpu_types_data.get(gpu_name, {})
 
                 # Display GPU specifications
                 if isinstance(gpu_spec, dict):
                     # Memory
-                    if "VRAM_GB" in gpu_spec:
-                        st.metric("Memory", f"{gpu_spec['VRAM_GB']} GB")
+                    if "memory_gb" in gpu_spec:
+                        st.metric("Memory", f"{gpu_spec['memory_gb']} GB")
 
-                    # Memory Type
-                    if "Memory_Type" in gpu_spec:
-                        st.write(f"**Memory Type:** {gpu_spec['Memory_Type']}")
+                    # Compute Capability
+                    if "compute_capability" in gpu_spec:
+                        st.write(f"**Compute Capability:** {gpu_spec['compute_capability']}")
 
-                    # Memory bandwidth
-                    if "Memory_Bandwidth_GBs" in gpu_spec:
-                        st.write(f"**Memory Bandwidth:** {gpu_spec['Memory_Bandwidth_GBs']} GB/s")
+                    # Cost per hour
+                    if (
+                        "cost_per_hour_usd" in gpu_spec
+                        and gpu_spec["cost_per_hour_usd"] is not None
+                    ):
+                        st.write(f"**Cost per Hour:** ${gpu_spec['cost_per_hour_usd']:.2f}")
 
-                    # FP16/FP8 TFLOPS
-                    if "FP16_TFLOPS" in gpu_spec:
-                        st.write(f"**FP16 TFLOPS:** {gpu_spec['FP16_TFLOPS']:.1f}")
-                    if "FP8_TFLOPS" in gpu_spec and gpu_spec["FP8_TFLOPS"] is not None:
-                        st.write(f"**FP8 TFLOPS:** {gpu_spec['FP8_TFLOPS']:.1f}")
-
-                    # Architecture
-                    if "Architecture" in gpu_spec:
-                        st.write(f"**Architecture:** {gpu_spec['Architecture']}")
+                    # Notes
+                    if "notes" in gpu_spec and gpu_spec["notes"]:
+                        st.write(f"**Notes:** {gpu_spec['notes']}")
                 else:
-                    # Fallback if GPU_SPECS has a different structure
+                    # Fallback if gpu spec has a different structure
                     st.write(gpu_spec)
 
     # Show example use cases

@@ -616,9 +616,9 @@ def test_inference_dtype_byte():
         deepseek3: 2,
     }
 
-    for model, expceted in model_to_dtype_byte.items():
+    for model, expected in model_to_dtype_byte.items():
         model_config = get_model_config_from_hf(model)
-        assert inference_dtype_byte(model_config) == expceted
+        assert inference_dtype_byte(model_config) == expected
 
 
 @pytest.mark.integration

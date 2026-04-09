@@ -172,6 +172,144 @@ def fetch_gpu_types() -> dict[str, dict]:
         return {}
 
 
+def fetch_capacity_planner_model_info(model_id: str) -> dict | None:
+    """Fetch model metadata from HuggingFace via the backend.
+
+    Returns the full model-info response dict, or None on error.
+    Error detail (e.g. gated model message) is surfaced via st.error in the caller.
+    """
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/api/v1/model-info",
+            json={"model_id": model_id},
+            timeout=60,
+        )
+        if response.status_code == 200:
+            return cast(dict[Any, Any], response.json())
+        elif response.status_code == 403:
+            st.error(
+                "This is a gated model. Set the `HF_TOKEN` environment variable "
+                "on the backend to access it."
+            )
+        else:
+            st.error(f"Failed to fetch model info: {response.text[:200]}")
+    except requests.exceptions.ConnectionError:
+        st.error("Cannot connect to backend API.")
+    except requests.exceptions.Timeout:
+        st.error("Request to fetch model info timed out.")
+    except Exception as e:
+        st.error(f"Error fetching model info: {e}")
+    return None
+
+
+def fetch_capacity_planner_calculate(
+    model_id: str,
+    max_model_len: int | None = None,
+    batch_size: int = 1,
+    gpu_memory: float | None = None,
+    tp: int = 1,
+    pp: int = 1,
+    dp: int = 1,
+    gpu_mem_util: float = 0.9,
+    block_size: int = 16,
+) -> dict | None:
+    """Run capacity planning calculations via the backend.
+
+    Returns the calculate response dict, or None on error.
+    """
+    payload: dict[str, Any] = {
+        "model_id": model_id,
+        "batch_size": batch_size,
+        "tp": tp,
+        "pp": pp,
+        "dp": dp,
+        "gpu_mem_util": gpu_mem_util,
+        "block_size": block_size,
+    }
+    if max_model_len is not None:
+        payload["max_model_len"] = max_model_len
+    if gpu_memory is not None:
+        payload["gpu_memory"] = gpu_memory
+
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/api/v1/calculate",
+            json=payload,
+            timeout=60,
+        )
+        if response.status_code == 200:
+            return cast(dict[Any, Any], response.json())
+        else:
+            try:
+                error_detail = response.json().get("detail", response.text[:200])
+            except Exception:
+                error_detail = response.text[:200]
+            st.warning(f"Calculation error: {error_detail}")
+    except requests.exceptions.ConnectionError:
+        st.warning("Cannot connect to backend API.")
+    except Exception as e:
+        st.warning(f"Calculation failed: {e}")
+    return None
+
+
+def fetch_gpu_recommender_estimate(
+    model_id: str,
+    input_len: int,
+    output_len: int,
+    max_gpus: int = 1,
+    max_gpus_per_type: dict[str, int] | None = None,
+    gpu_list: list[str] | None = None,
+    max_ttft: float | None = None,
+    max_itl: float | None = None,
+    max_latency: float | None = None,
+    custom_gpu_costs: dict[str, float] | None = None,
+) -> dict | None:
+    """Run GPU performance estimation via the backend.
+
+    Returns the estimate response dict, or None on error.
+    """
+    payload: dict[str, Any] = {
+        "model_id": model_id,
+        "input_len": input_len,
+        "output_len": output_len,
+        "max_gpus": max_gpus,
+    }
+    if max_gpus_per_type:
+        payload["max_gpus_per_type"] = max_gpus_per_type
+    if gpu_list:
+        payload["gpu_list"] = gpu_list
+    if max_ttft is not None:
+        payload["max_ttft"] = max_ttft
+    if max_itl is not None:
+        payload["max_itl"] = max_itl
+    if max_latency is not None:
+        payload["max_latency"] = max_latency
+    if custom_gpu_costs:
+        payload["custom_gpu_costs"] = custom_gpu_costs
+
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/api/v1/estimate",
+            json=payload,
+            timeout=120,  # GPU estimation can be slow
+        )
+        if response.status_code == 200:
+            return cast(dict[Any, Any], response.json())
+        else:
+            try:
+                error_detail = response.json().get("detail", response.text[:200])
+            except Exception:
+                error_detail = response.text[:200]
+            st.error(f"Estimation error: {error_detail}")
+    except requests.exceptions.ConnectionError:
+        st.error("Cannot connect to backend API.")
+    except requests.exceptions.Timeout:
+        st.error("GPU estimation timed out.")
+    except Exception as e:
+        st.error(f"Estimation error: {e}")
+    return None
+
+
 def fetch_ranked_recommendations(
     use_case: str,
     user_count: int,
