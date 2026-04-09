@@ -16,9 +16,9 @@ class TestGPUProductMap:
 
         catalog = ModelCatalog()
         for label, canonical in GPU_PRODUCT_MAP.items():
-            assert (
-                catalog.get_gpu_type(canonical) is not None
-            ), f"GPU_PRODUCT_MAP['{label}'] = '{canonical}' is not in ModelCatalog"
+            assert catalog.get_gpu_type(canonical) is not None, (
+                f"GPU_PRODUCT_MAP['{label}'] = '{canonical}' is not in ModelCatalog"
+            )
 
     def test_map_covers_all_nvidia_catalog_gpu_types(self):
         """Regression: Every NVIDIA GPU in catalog should be in GPU_PRODUCT_MAP."""

@@ -29,9 +29,9 @@ def test_scenario_can_show_mem_util_chart_is_gone():
     """can_show_mem_util_chart() was dead code referencing model_config; must be removed."""
     from util import Scenario
 
-    assert not hasattr(
-        Scenario, "can_show_mem_util_chart"
-    ), "can_show_mem_util_chart must be removed — it was dead code"
+    assert not hasattr(Scenario, "can_show_mem_util_chart"), (
+        "can_show_mem_util_chart must be removed — it was dead code"
+    )
 
 
 @pytest.mark.unit

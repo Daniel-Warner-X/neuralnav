@@ -307,9 +307,9 @@ def test_max_concurrent_req():
             dp=dp,
         )
 
-        assert (
-            actual_max_concurrent_req == expected
-        ), f"Failed for tp={tp}, pp={pp}, dp={dp}: expected {expected}, got {actual_max_concurrent_req}"
+        assert actual_max_concurrent_req == expected, (
+            f"Failed for tp={tp}, pp={pp}, dp={dp}: expected {expected}, got {actual_max_concurrent_req}"
+        )
 
 
 @pytest.mark.integration
@@ -663,9 +663,9 @@ def test_estimate_vllm_activation_memory_basic():
     assert activation_mem > 0, f"Activation memory should be positive, got {activation_mem}"
 
     # For a dense model, activation memory should be around 5.5 GB (constant)
-    assert (
-        4.5 <= activation_mem <= 6.0
-    ), f"Activation memory should be ~5.5 GB, got {activation_mem} GiB"
+    assert 4.5 <= activation_mem <= 6.0, (
+        f"Activation memory should be ~5.5 GB, got {activation_mem} GiB"
+    )
 
 
 # REMOVED: test_estimate_vllm_activation_memory_zero_seq_len
@@ -738,16 +738,16 @@ def test_estimate_vllm_activation_memory_empirical_validation():
     # Empirical: 5.56 GiB at both 16K and 32K, Expected with base 5.5: 5.5 GiB
     qwen_config = get_model_config_from_hf(qwen_model)
     qwen_activation = estimate_vllm_activation_memory(qwen_config, tp=1)
-    assert (
-        5.0 <= qwen_activation <= 6.0
-    ), f"Qwen3-0.6B activation {qwen_activation} GiB outside expected range [5.0, 6.0] (empirical: 5.56)"
+    assert 5.0 <= qwen_activation <= 6.0, (
+        f"Qwen3-0.6B activation {qwen_activation} GiB outside expected range [5.0, 6.0] (empirical: 5.56)"
+    )
 
     # Test case 2: TP=2 should give same result as TP=1 (empirical observation)
     # Empirical data shows activation memory is constant regardless of TP
     qwen_activation_tp2 = estimate_vllm_activation_memory(qwen_config, tp=2)
-    assert (
-        qwen_activation == qwen_activation_tp2
-    ), f"Activation memory should be constant with TP: TP=1 {qwen_activation} vs TP=2 {qwen_activation_tp2}"
+    assert qwen_activation == qwen_activation_tp2, (
+        f"Activation memory should be constant with TP: TP=1 {qwen_activation} vs TP=2 {qwen_activation_tp2}"
+    )
 
 
 @pytest.mark.integration
@@ -761,16 +761,16 @@ def test_estimate_vllm_activation_memory_moe():
     moe_activation = estimate_vllm_activation_memory(moe_config, tp=1)
 
     # Should be around 8.0 GB for MoE models
-    assert (
-        7.0 <= moe_activation <= 9.0
-    ), f"MoE activation {moe_activation} GiB outside expected range [7.0, 9.0] (empirical: 7.38)"
+    assert 7.0 <= moe_activation <= 9.0, (
+        f"MoE activation {moe_activation} GiB outside expected range [7.0, 9.0] (empirical: 7.38)"
+    )
 
     # Should be higher than dense models
     dense_config = get_model_config_from_hf(qwen_model)
     dense_activation = estimate_vllm_activation_memory(dense_config, tp=1)
-    assert (
-        moe_activation > dense_activation
-    ), f"MoE activation {moe_activation} should be > dense activation {dense_activation}"
+    assert moe_activation > dense_activation, (
+        f"MoE activation {moe_activation} should be > dense activation {dense_activation}"
+    )
 
 
 @pytest.mark.integration
@@ -778,15 +778,15 @@ def test_is_multimodal():
     """Tests that multimodal models are correctly detected"""
     # Mistral-Small-3.2-24B is multimodal (PixtralForConditionalGeneration)
     mistral_config = get_model_config_from_hf(mistral_small)
-    assert is_multimodal(
-        mistral_config
-    ), f"Mistral-Small-3.2-24B should be detected as multimodal, architectures: {mistral_config.architectures}"
+    assert is_multimodal(mistral_config), (
+        f"Mistral-Small-3.2-24B should be detected as multimodal, architectures: {mistral_config.architectures}"
+    )
 
     # Qwen is NOT multimodal
     qwen_config = get_model_config_from_hf(qwen_model)
-    assert not is_multimodal(
-        qwen_config
-    ), f"Qwen should not be detected as multimodal, architectures: {qwen_config.architectures}"
+    assert not is_multimodal(qwen_config), (
+        f"Qwen should not be detected as multimodal, architectures: {qwen_config.architectures}"
+    )
 
     # MoE model is NOT multimodal
     moe_config = get_model_config_from_hf(gpt_oss)
@@ -802,22 +802,22 @@ def test_estimate_vllm_activation_memory_validated_lookup():
     mistral_activation = estimate_vllm_activation_memory(mistral_config, tp=1)
 
     expected = VALIDATED_ACTIVATION_PROFILES["PixtralForConditionalGeneration"]
-    assert (
-        mistral_activation == expected
-    ), f"Mistral-Small activation should be {expected} GiB (validated), got {mistral_activation} GiB"
+    assert mistral_activation == expected, (
+        f"Mistral-Small activation should be {expected} GiB (validated), got {mistral_activation} GiB"
+    )
 
     # Should be much less than the generic dense constant
-    assert (
-        mistral_activation < ACTIVATION_MEMORY_BASE_DENSE_GIB
-    ), f"Mistral multimodal ({mistral_activation}) should be < dense default ({ACTIVATION_MEMORY_BASE_DENSE_GIB})"
+    assert mistral_activation < ACTIVATION_MEMORY_BASE_DENSE_GIB, (
+        f"Mistral multimodal ({mistral_activation}) should be < dense default ({ACTIVATION_MEMORY_BASE_DENSE_GIB})"
+    )
 
     # Qwen2.5-0.5B has architecture Qwen2ForCausalLM, validated at 5.6 GiB
     qwen_config = get_model_config_from_hf(qwen_model)
     qwen_activation = estimate_vllm_activation_memory(qwen_config, tp=1)
     expected_qwen = VALIDATED_ACTIVATION_PROFILES["Qwen2ForCausalLM"]
-    assert (
-        qwen_activation == expected_qwen
-    ), f"Qwen activation should be {expected_qwen} GiB (validated), got {qwen_activation} GiB"
+    assert qwen_activation == expected_qwen, (
+        f"Qwen activation should be {expected_qwen} GiB (validated), got {qwen_activation} GiB"
+    )
 
 
 @pytest.mark.integration
@@ -830,9 +830,9 @@ def test_estimate_vllm_activation_memory_multimodal_fallback():
         architectures = ["LlavaForConditionalGeneration"]
 
     activation = estimate_vllm_activation_memory(FakeMultimodalConfig(), tp=1)  # type: ignore[arg-type]
-    assert (
-        activation == ACTIVATION_MEMORY_BASE_MULTIMODAL_GIB
-    ), f"Unknown multimodal should return {ACTIVATION_MEMORY_BASE_MULTIMODAL_GIB} GiB, got {activation} GiB"
+    assert activation == ACTIVATION_MEMORY_BASE_MULTIMODAL_GIB, (
+        f"Unknown multimodal should return {ACTIVATION_MEMORY_BASE_MULTIMODAL_GIB} GiB, got {activation} GiB"
+    )
 
 
 @pytest.mark.integration
@@ -843,9 +843,9 @@ def test_estimate_vllm_activation_memory_unknown_dense_fallback():
         architectures = ["SomeNewModelForCausalLM"]
 
     activation = estimate_vllm_activation_memory(FakeDenseConfig(), tp=1)  # type: ignore[arg-type]
-    assert (
-        activation == ACTIVATION_MEMORY_BASE_DENSE_GIB
-    ), f"Unknown dense model should return {ACTIVATION_MEMORY_BASE_DENSE_GIB} GiB, got {activation} GiB"
+    assert activation == ACTIVATION_MEMORY_BASE_DENSE_GIB, (
+        f"Unknown dense model should return {ACTIVATION_MEMORY_BASE_DENSE_GIB} GiB, got {activation} GiB"
+    )
 
 
 # ---- Comprehensive Tests for Various Models ----
@@ -933,9 +933,9 @@ def test_model_memory_req_various_models():
     for model_name, min_gb, max_gb in test_cases:
         model_config = get_model_config_from_hf(model_name)
         memory = model_memory_req(model_name, model_config)
-        assert (
-            min_gb <= memory <= max_gb
-        ), f"{model_name}: memory {memory} GB not in expected range [{min_gb}, {max_gb}]"
+        assert min_gb <= memory <= max_gb, (
+            f"{model_name}: memory {memory} GB not in expected range [{min_gb}, {max_gb}]"
+        )
 
 
 @pytest.mark.integration

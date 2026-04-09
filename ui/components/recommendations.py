@@ -270,22 +270,22 @@ def render_options_list_inline():
         for row in table_data:
             rows_html.append(f"""
                 <tr
-                    data-category="{row['category']}"
-                    data-model="{row['model']}"
-                    data-gpu="{row['gpu_config']}"
-                    data-ttft="{row['ttft']}"
-                    data-cost="{row['cost']}"
-                    data-accuracy="{row['accuracy']}"
-                    data-balanced="{row['balanced']}"
-                    data-slo="{row['slo_value']}">
-                    <td style="padding: 0.75rem 0.5rem; ">{row['category']}</td>
-                    <td style="padding: 0.75rem 0.5rem; font-weight: 500;">{row['model']}</td>
-                    <td style="padding: 0.75rem 0.5rem; font-size: 0.85rem;">{row['gpu_config']}</td>
-                    <td style="padding: 0.75rem 0.5rem; text-align: right; ">{row['ttft']:.0f}ms</td>
-                    <td style="padding: 0.75rem 0.5rem; text-align: right; ">${row['cost']:,.0f}</td>
-                    <td style="padding: 0.75rem 0.5rem; text-align: center; ">{row['accuracy']:.0f}</td>
-                    <td style="padding: 0.75rem 0.5rem; text-align: center; ">{row['balanced']:.1f}</td>
-                    <td style="padding: 0.75rem 0.5rem; text-align: center;">{row['slo']}</td>
+                    data-category="{row["category"]}"
+                    data-model="{row["model"]}"
+                    data-gpu="{row["gpu_config"]}"
+                    data-ttft="{row["ttft"]}"
+                    data-cost="{row["cost"]}"
+                    data-accuracy="{row["accuracy"]}"
+                    data-balanced="{row["balanced"]}"
+                    data-slo="{row["slo_value"]}">
+                    <td style="padding: 0.75rem 0.5rem; ">{row["category"]}</td>
+                    <td style="padding: 0.75rem 0.5rem; font-weight: 500;">{row["model"]}</td>
+                    <td style="padding: 0.75rem 0.5rem; font-size: 0.85rem;">{row["gpu_config"]}</td>
+                    <td style="padding: 0.75rem 0.5rem; text-align: right; ">{row["ttft"]:.0f}ms</td>
+                    <td style="padding: 0.75rem 0.5rem; text-align: right; ">${row["cost"]:,.0f}</td>
+                    <td style="padding: 0.75rem 0.5rem; text-align: center; ">{row["accuracy"]:.0f}</td>
+                    <td style="padding: 0.75rem 0.5rem; text-align: center; ">{row["balanced"]:.1f}</td>
+                    <td style="padding: 0.75rem 0.5rem; text-align: center;">{row["slo"]}</td>
                 </tr>
             """)
 
@@ -339,7 +339,7 @@ def render_options_list_inline():
                 </tr>
             </thead>
             <tbody>
-                {''.join(rows_html)}
+                {"".join(rows_html)}
             </tbody>
         </table>
         <script>

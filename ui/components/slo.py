@@ -83,7 +83,7 @@ def get_workload_insights(use_case: str, qps: int, user_count: int) -> list:
         (
             "",
             "",
-            f"Pattern: {distribution.replace('_', ' ').title()} | {int(active_fraction*100)}% concurrent users",
+            f"Pattern: {distribution.replace('_', ' ').title()} | {int(active_fraction * 100)}% concurrent users",
             "info",
         )
     )
@@ -451,7 +451,7 @@ def render_slo_with_approval(extraction: dict):
                         border-radius: 8px; padding: 0.75rem; margin-bottom: 0.75rem; text-align: center;">
                 <div style="color: #ef4444; font-weight: 600; font-size: 0.9rem;">⚠️ Invalid SLO Values</div>
                 <div style="font-size: 0.8rem; margin-top: 0.25rem;">
-                    {' • '.join(validation_errors)}
+                    {" • ".join(validation_errors)}
                 </div>
             </div>
             """,

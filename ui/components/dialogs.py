@@ -195,9 +195,9 @@ def _render_winner_details(winner: dict, priority: str, extraction: dict):
         <div style="padding: 1rem; border-radius: 0.75rem; margin-bottom: 1rem; ">
             <p style="margin: 0; font-size: 0.95rem; line-height: 1.6;">
                 <strong>{model_name}</strong> ranked highest for <strong>{use_case_display}</strong>
-                with a balanced score of <strong>{breakdown.get('quality_score', 0):.0f}</strong> accuracy,
-                <strong>{breakdown.get('latency_score', 0):.0f}</strong> latency,
-                and <strong>{breakdown.get('cost_score', 0):.0f}</strong> cost efficiency.
+                with a balanced score of <strong>{breakdown.get("quality_score", 0):.0f}</strong> accuracy,
+                <strong>{breakdown.get("latency_score", 0):.0f}</strong> latency,
+                and <strong>{breakdown.get("cost_score", 0):.0f}</strong> cost efficiency.
             </p>
         </div>
         """,
@@ -236,8 +236,8 @@ def _render_winner_details(winner: dict, priority: str, extraction: dict):
         )
         st.markdown(
             f"""
-        <p ><strong >Final Score:</strong> <code style="padding: 0.35rem 0.75rem; border-radius: 0.25rem; font-weight: 700; font-size: 1.1rem;">{winner.get('final_score', 0):.1f}/100</code></p>
-        <p style="color: rgba(212, 175, 55, 0.8); font-style: italic;">Based on {priority.replace('_', ' ').title()} priority weighting</p>
+        <p ><strong >Final Score:</strong> <code style="padding: 0.35rem 0.75rem; border-radius: 0.25rem; font-weight: 700; font-size: 1.1rem;">{winner.get("final_score", 0):.1f}/100</code></p>
+        <p style="color: rgba(212, 175, 55, 0.8); font-style: italic;">Based on {priority.replace("_", " ").title()} priority weighting</p>
         """,
             unsafe_allow_html=True,
         )
@@ -310,7 +310,7 @@ def _render_winner_details(winner: dict, priority: str, extraction: dict):
                     <span style="font-weight: 700; font-size: 0.9rem; text-transform: uppercase;">TTFT</span>
                 </div>
                 <div style="text-align: center;">
-                    <p style="font-weight: 800; font-size: 2rem; margin: 0;">{int(ttft_p95_show) if ttft_p95_show else 'N/A'}<span style="font-size: 1rem; ">ms</span></p>
+                    <p style="font-weight: 800; font-size: 2rem; margin: 0;">{int(ttft_p95_show) if ttft_p95_show else "N/A"}<span style="font-size: 1rem; ">ms</span></p>
                     <p style="font-size: 0.75rem; margin: 0.25rem 0 0 0;">p95 latency</p>
                 </div>
             </div>
@@ -327,7 +327,7 @@ def _render_winner_details(winner: dict, priority: str, extraction: dict):
                     <span style="font-weight: 700; font-size: 0.9rem; text-transform: uppercase;">ITL</span>
                 </div>
                 <div style="text-align: center;">
-                    <p style="font-weight: 800; font-size: 2rem; margin: 0;">{int(itl_p95_show) if itl_p95_show else 'N/A'}<span style="font-size: 1rem; ">ms</span></p>
+                    <p style="font-weight: 800; font-size: 2rem; margin: 0;">{int(itl_p95_show) if itl_p95_show else "N/A"}<span style="font-size: 1rem; ">ms</span></p>
                     <p style="font-size: 0.75rem; margin: 0.25rem 0 0 0;">inter-token latency</p>
                 </div>
             </div>
@@ -344,7 +344,7 @@ def _render_winner_details(winner: dict, priority: str, extraction: dict):
                     <span style="font-weight: 700; font-size: 0.9rem; text-transform: uppercase;">E2E</span>
                 </div>
                 <div style="text-align: center;">
-                    <p style="font-weight: 800; font-size: 2rem; margin: 0;">{int(e2e_p95_show) if e2e_p95_show else 'N/A'}<span style="font-size: 1rem; ">ms</span></p>
+                    <p style="font-weight: 800; font-size: 2rem; margin: 0;">{int(e2e_p95_show) if e2e_p95_show else "N/A"}<span style="font-size: 1rem; ">ms</span></p>
                     <p style="font-size: 0.75rem; margin: 0.25rem 0 0 0;">end-to-end</p>
                 </div>
             </div>
@@ -358,7 +358,7 @@ def _render_winner_details(winner: dict, priority: str, extraction: dict):
             <div style="padding: 1rem; border-radius: 0.75rem; text-align: center; ">
                 <span style="font-size: 1.25rem;">🚀</span>
                 <p style="margin: 0.25rem 0 0 0; font-size: 0.75rem; text-transform: uppercase;">Throughput</p>
-                <p style="font-weight: 800; font-size: 1.5rem; margin: 0;">{int(tps_show) if tps_show else 'N/A'} <span style="font-size: 0.8rem;">tok/s</span></p>
+                <p style="font-weight: 800; font-size: 1.5rem; margin: 0;">{int(tps_show) if tps_show else "N/A"} <span style="font-size: 0.8rem;">tok/s</span></p>
             </div>
             <div style="padding: 1rem; border-radius: 0.75rem; text-align: center; ">
                 <span style="font-size: 1rem; font-weight: 700;">HW</span>
@@ -375,7 +375,7 @@ def _render_winner_details(winner: dict, priority: str, extraction: dict):
         <div style="margin-top: 1rem; padding: 0.75rem; border-radius: 0.5rem; ">
             <p style="margin: 0; font-size: 0.8rem; text-align: center;">
                 <strong >Data Source:</strong> vLLM Simulation Benchmarks |
-                <strong >Model:</strong> {winner.get('model_name', 'Unknown')}
+                <strong >Model:</strong> {winner.get("model_name", "Unknown")}
             </p>
         </div>
         """,
@@ -472,7 +472,7 @@ def show_category_dialog():
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
                     <span style="font-weight: 800; padding: 0.25rem 0.6rem;
-                                border-radius: 6px; font-size: 0.85rem;">#{i+1}</span>
+                                border-radius: 6px; font-size: 0.85rem;">#{i + 1}</span>
                     <div>
                         <div style="font-weight: 700; font-size: 1.05rem;">{model_name}</div>
                         <div style="font-size: 0.8rem;">{hw_display} (TP={tp})</div>
@@ -485,23 +485,23 @@ def show_category_dialog():
             </div>
             <div style="display: flex; gap: 1rem; margin-bottom: 0.75rem; padding: 0.5rem;
                         border-radius: 8px;">
-                <span style="font-size: 0.8rem;">Acc: {scores['accuracy']:.0f}</span>
-                <span style="font-size: 0.8rem;">Lat: {scores['latency']:.0f}</span>
-                <span style="font-size: 0.8rem;">Cost: {scores['cost']:.0f}</span>
-                <span style="font-size: 0.8rem; font-weight: 600;">Final: {scores['final']:.1f}</span>
+                <span style="font-size: 0.8rem;">Acc: {scores["accuracy"]:.0f}</span>
+                <span style="font-size: 0.8rem;">Lat: {scores["latency"]:.0f}</span>
+                <span style="font-size: 0.8rem;">Cost: {scores["cost"]:.0f}</span>
+                <span style="font-size: 0.8rem; font-weight: 600;">Final: {scores["final"]:.1f}</span>
             </div>
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;">
                 <div style="padding: 0.4rem; border-radius: 6px; text-align: center;">
                     <div style="font-size: 0.65rem;">TTFT ({percentile_label})</div>
-                    <div style="font-weight: 700; font-size: 0.9rem;">{ttft if isinstance(ttft, str) else f'{ttft:.0f}ms'}</div>
+                    <div style="font-weight: 700; font-size: 0.9rem;">{ttft if isinstance(ttft, str) else f"{ttft:.0f}ms"}</div>
                 </div>
                 <div style="padding: 0.4rem; border-radius: 6px; text-align: center;">
                     <div style="font-size: 0.65rem;">ITL ({percentile_label})</div>
-                    <div style="font-weight: 700; font-size: 0.9rem;">{itl if isinstance(itl, str) else f'{itl:.0f}ms'}</div>
+                    <div style="font-weight: 700; font-size: 0.9rem;">{itl if isinstance(itl, str) else f"{itl:.0f}ms"}</div>
                 </div>
                 <div style="padding: 0.4rem; border-radius: 6px; text-align: center;">
                     <div style="font-size: 0.65rem;">E2E ({percentile_label})</div>
-                    <div style="font-weight: 700; font-size: 0.9rem;">{e2e if isinstance(e2e, str) else f'{e2e:.0f}ms'}</div>
+                    <div style="font-weight: 700; font-size: 0.9rem;">{e2e if isinstance(e2e, str) else f"{e2e:.0f}ms"}</div>
                 </div>
                 <div style="padding: 0.4rem; border-radius: 6px; text-align: center;">
                     <div style="font-size: 0.65rem;">Throughput</div>
@@ -569,7 +569,7 @@ def show_full_table_dialog():
                 slo_icon = "Yes" if meets_slo else "No"
 
                 cat_display = (
-                    f'<span style="font-weight: 600;">{cat_name}</span> (+{len(recs)-1})'
+                    f'<span style="font-weight: 600;">{cat_name}</span> (+{len(recs) - 1})'
                     if i == 0
                     else ""
                 )

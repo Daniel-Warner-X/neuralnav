@@ -81,12 +81,12 @@ def test_gpu_recommender():
     print(f"✅ Custom costs applied correctly: H100 = ${h100_cost}")
 
     # Test methods exist
-    assert hasattr(
-        recommender, "get_gpu_with_lowest_cost"
-    ), "Missing get_gpu_with_lowest_cost method"
-    assert hasattr(
-        recommender, "get_results_sorted_by_cost"
-    ), "Missing get_results_sorted_by_cost method"
+    assert hasattr(recommender, "get_gpu_with_lowest_cost"), (
+        "Missing get_gpu_with_lowest_cost method"
+    )
+    assert hasattr(recommender, "get_results_sorted_by_cost"), (
+        "Missing get_results_sorted_by_cost method"
+    )
     print("✅ New cost methods available")
 
     print("\n✅ All GPURecommender integration tests passed!\n")

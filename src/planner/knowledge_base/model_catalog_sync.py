@@ -293,7 +293,7 @@ def sync_model_catalog(
     if rows:
         if result.errors:
             logger.warning(
-                "Proceeding with DB insert despite %d crawl errors; " "%d valid rows collected",
+                "Proceeding with DB insert despite %d crawl errors; %d valid rows collected",
                 len(result.errors),
                 len(rows),
             )

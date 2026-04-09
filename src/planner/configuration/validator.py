@@ -160,8 +160,7 @@ class YAMLValidator:
 
         if not data.get("apiVersion", "").startswith("serving.kserve.io"):
             raise ValidationError(
-                f"Expected apiVersion 'serving.kserve.io/v1beta1', "
-                f"got '{data.get('apiVersion')}'"
+                f"Expected apiVersion 'serving.kserve.io/v1beta1', got '{data.get('apiVersion')}'"
             )
 
         # Check if this is simulator mode (skip GPU validation)

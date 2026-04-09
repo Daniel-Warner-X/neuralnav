@@ -53,8 +53,8 @@ def build_conversational_prompt(
 
     understanding = ""
     if current_understanding:
-        understanding = f"""- Use case: {current_understanding.get('use_case', 'unknown')}
-- User count: {current_understanding.get('user_count', 'unknown')}
+        understanding = f"""- Use case: {current_understanding.get("use_case", "unknown")}
+- User count: {current_understanding.get("user_count", "unknown")}
 """
 
     return CONVERSATIONAL_RESPONSE_TEMPLATE.format(

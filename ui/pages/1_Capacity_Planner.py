@@ -331,31 +331,31 @@ def workload_specification():
         # Display details on how KV cache is estimated
         with st.expander("See how KV cache is calculated below"):
             st.write(f"""First, the per-token memory requirement is estimated given the following inputs:
-- KV cache data type: `{kv['kv_data_type']}` = {kv['precision_in_bytes']} bytes in memory
-- Hidden layers: {kv['num_hidden_layers']}
+- KV cache data type: `{kv["kv_data_type"]}` = {kv["precision_in_bytes"]} bytes in memory
+- Hidden layers: {kv["num_hidden_layers"]}
 
-This model uses _{kv['attention_type']}_. The relevant parameters are:
+This model uses _{kv["attention_type"]}_. The relevant parameters are:
 """)
             if kv.get("kv_lora_rank"):
-                st.write(f"""- KV lora rank: {kv['kv_lora_rank']}
-- QK rope head dimension: {kv['qk_rope_head_dim']}""")
+                st.write(f"""- KV lora rank: {kv["kv_lora_rank"]}
+- QK rope head dimension: {kv["qk_rope_head_dim"]}""")
 
                 st.code(f"""
 Per-token memory = layers x (kv_lora_rank + qk_rope_head_dim) x precision_in_bytes
-                 = {kv['num_hidden_layers']} x ({kv['kv_lora_rank']} + {kv['qk_rope_head_dim']}) x {kv['precision_in_bytes']}
-                 = {kv['per_token_memory_bytes']} bytes
+                 = {kv["num_hidden_layers"]} x ({kv["kv_lora_rank"]} + {kv["qk_rope_head_dim"]}) x {kv["precision_in_bytes"]}
+                 = {kv["per_token_memory_bytes"]} bytes
 """)
             else:
-                st.write(f"""- Head dimension: {kv['head_dimension']}
-- Attention heads: {kv['num_attention_heads']}
-- KV heads: {kv['num_key_value_heads']}
-- Number of attention groups: {kv['num_attention_group']}
+                st.write(f"""- Head dimension: {kv["head_dimension"]}
+- Attention heads: {kv["num_attention_heads"]}
+- KV heads: {kv["num_key_value_heads"]}
+- Number of attention groups: {kv["num_attention_group"]}
 """)
 
                 st.code(f"""
 Per-token memory = layers x 2 (two for K and V matrices) x head_dimension x (kv_heads / num_attention_groups) x precision_in_bytes
-                 = {kv['num_hidden_layers']} x 2 x {kv['head_dimension']} x ({kv['num_attention_heads']} / {kv['num_key_value_heads']}) x {kv['precision_in_bytes']}
-                 = {kv['per_token_memory_bytes']} bytes
+                 = {kv["num_hidden_layers"]} x 2 x {kv["head_dimension"]} x ({kv["num_attention_heads"]} / {kv["num_key_value_heads"]}) x {kv["precision_in_bytes"]}
+                 = {kv["per_token_memory_bytes"]} bytes
 """)
 
             st.write(f"""Finally, the per-token-memory is then multiplied by the context length (max-model-len) and batch size (concurrency).
@@ -364,16 +364,16 @@ Per-token memory = layers x 2 (two for K and V matrices) x head_dimension x (kv_
 """)
             st.code(f"""
 KV cache per request = per_token_memory x context_len x batch_size
-                     = {kv['per_token_memory_bytes']} x {user_scenario.max_model_len} x {user_scenario.concurrency}
-                     = {kv['per_request_kv_cache_bytes']} bytes
-                     = {kv['per_request_kv_cache_bytes']} / (1024 ^ 3)
-                     = {kv['per_request_kv_cache_gb']} GB
+                     = {kv["per_token_memory_bytes"]} x {user_scenario.max_model_len} x {user_scenario.concurrency}
+                     = {kv["per_request_kv_cache_bytes"]} bytes
+                     = {kv["per_request_kv_cache_bytes"]} / (1024 ^ 3)
+                     = {kv["per_request_kv_cache_gb"]} GB
 """)
 
             st.code(f"""
 KV cache for max concurrency = kv_cache_per_request x concurrency
-                             = {kv['per_request_kv_cache_gb']} GB x {user_scenario.concurrency}
-                             = {kv['kv_cache_size_gb']} GB
+                             = {kv["per_request_kv_cache_gb"]} GB x {user_scenario.concurrency}
+                             = {kv["kv_cache_size_gb"]} GB
 """)
 
         # Display details on how activation memory is estimated
@@ -404,12 +404,12 @@ Runtime per-request activation buffers (which DO scale with actual sequence leng
             source_label = act["source"]
 
             st.write(f"""
-**Model Type:** {model_type} | **Architecture:** `{arch_name or 'unknown'}`
+**Model Type:** {model_type} | **Architecture:** `{arch_name or "unknown"}`
 
 **Activation Memory Constants:**
-- Dense models (default): {act['base_constants']['dense_gib']} GB
-- MoE models: {act['base_constants']['moe_gib']} GB
-- Multimodal models: {act['base_constants']['multimodal_gib']} GB
+- Dense models (default): {act["base_constants"]["dense_gib"]} GB
+- MoE models: {act["base_constants"]["moe_gib"]} GB
+- Multimodal models: {act["base_constants"]["multimodal_gib"]} GB
 
 **Validated Profiles:**
 """)

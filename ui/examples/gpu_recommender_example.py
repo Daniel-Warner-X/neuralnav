@@ -225,15 +225,15 @@ def example_restrictive_constraints():
 
     gpu_results, failed_gpus = recommender.get_gpu_results()
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Results:")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"GPUs that met constraints: {len(gpu_results)}")
     print(f"GPUs that failed constraints: {len(failed_gpus)}")
 
     if failed_gpus:
         print(f"\n{'Failed GPUs and Reasons:'}")
-        print(f"{'-'*60}")
+        print(f"{'-' * 60}")
         for gpu_name, error_msg in failed_gpus.items():
             print(f"\n  {gpu_name}:")
             # Wrap long error messages
@@ -244,9 +244,9 @@ def example_restrictive_constraints():
                 print(f"    {error_msg}")
 
     if not gpu_results:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("⚠️  NO GPUs could meet these constraints!")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print("\nRecommendations:")
         print("  1. Relax the performance constraints")
         print("  2. Increase max_gpus to allow tensor parallelism")
