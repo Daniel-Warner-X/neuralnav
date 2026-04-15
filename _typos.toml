@@ -1,0 +1,2 @@
+[default.extend-words]
+MAPE = "MAPE"  # Mean Absolute Percentage Error
