@@ -532,7 +532,7 @@ def render_recommendation_result(result: dict, priority: str, extraction: dict):
                 "View Deployment Configuration",
                 key="view_deployment_config_btn",
                 use_container_width=True,
-                type="primary"
+                type="primary",
             ):
                 # Navigate to Deployment tab (index 3)
                 st.session_state["_pending_tab"] = 3
@@ -542,7 +542,7 @@ def render_recommendation_result(result: dict, priority: str, extraction: dict):
                 "View Deployment Configuration",
                 key="view_deployment_config_btn_disabled",
                 use_container_width=True,
-                disabled=True
+                disabled=True,
             )
 
     # === CONFIGURATION OPTIONS SECTION ===
